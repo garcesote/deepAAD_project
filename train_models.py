@@ -13,15 +13,16 @@ import os
 import json
 import wandb
 
-def main(config):
+def main(config, wandb_upload):
+
+    global_path = config['global_path']
+    global_data_path = config['global_data_path']
 
     for exp in config['experiments']:
 
         # Global params
         exp_name = exp['name']
         key = exp['key']
-        global_path = exp['global_path']
-        global_data_path = exp['global_data_path']
         dataset = exp['dataset']
         model = exp['model']
 
@@ -45,12 +46,13 @@ def main(config):
         fixed = ds_config['fixed']
         rnd_trials = ds_config['rnd_trials']
         unit_output = ds_config['unit_output']
+        val_bs = batch_size if unit_output else 1 # batch size equals 1 for estamiting a window when single output
 
         # Saving paths
         mdl_save_path = global_path + '/results/'+exp['key']+'/models'
         metrics_save_path = global_path + '/results/'+exp['key']+'/metrics'
 
-        # Population mode that generates a model for all samples
+        # # Population mode that generates a model for all samples
         if key == 'population':
             selected_subj = [get_subjects(dataset)]
         else:
@@ -67,7 +69,8 @@ def main(config):
                 else:
                     print(f'Training {model} on {subj} with {dataset} data...')
 
-            run = wandb.init(project='replicate_model_results', config=exp)
+            if wandb_upload:
+                run = wandb.init(project='replicate_model_results', config=exp)
 
             # LOAD THE DATA
             train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, filt=filt, filt_path=filt_path, 
@@ -78,24 +81,23 @@ def main(config):
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
             # LOAD THE MODEL
-            match model:
-                case 'FCNN':
-                    exp['model_params']['n_chan'] = get_channels(dataset)
-                    mdl = FCNN(**exp['model_params'])
-                case 'VLAAI':
-                    exp['model_params']['input_channels'] = get_channels(dataset)
-                    mdl = VLAAI(**exp['model_params'])
-                case 'EEG_Conformer':
-                    exp['model_params']['eeg_channels'] = get_channels(dataset)
-                    mdl_config = ConformerConfig(**exp['model_params'])
-                    mdl = Conformer(**mdl_config)
-                case _:
-                    raise ValueError('Introduce a valid model')
+            if model == 'FCNN':
+                exp['model_params']['n_chan'] = get_channels(dataset)
+                mdl = FCNN(**exp['model_params'])
+            elif model == 'VLAAI':
+                exp['model_params']['input_channels'] = get_channels(dataset)
+                mdl = VLAAI(**exp['model_params'])
+            elif model == 'EEG_Conformer':
+                exp['model_params']['eeg_channels'] = get_channels(dataset)
+                mdl_config = ConformerConfig(**exp['model_params'])
+                mdl = Conformer(**mdl_config)
+            else:
+                raise ValueError('Introduce a valid model')
             
             mdl.to(device)
             
             train_loader = DataLoader(train_set, batch_size, shuffle=True, pin_memory=True)
-            val_loader = DataLoader(val_set, batch_size, shuffle= not unit_output, pin_memory=True)
+            val_loader = DataLoader(val_set, val_bs, shuffle= not unit_output, pin_memory=True)
 
             optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
             scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience, verbose=True)
@@ -106,7 +108,6 @@ def main(config):
 
             train_mean_loss = []
             val_mean_loss = []
-            train_decAccuracies = []
             val_decAccuracies = []
 
             # Training loop
@@ -118,7 +119,6 @@ def main(config):
 
                 mdl.train()
                 train_loss = []
-                train_att_corr = 0
 
                 # Initialize tqdm progress bar
                 train_loader_tqdm = tqdm(train_loader, desc=f'Epoch {epoch}/{max_epoch}', leave=False, mininterval=0.5)
@@ -136,11 +136,6 @@ def main(config):
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
-
-                    # Decoding accuracy of the model
-                    unat_loss = correlation(stimb, preds, batch_dim=unit_output)
-                    if loss.item() > unat_loss.item():
-                        train_att_corr += 1
                     
                     # Append neg. loss corresponding to the coef. Pearson
                     train_loss.append(-loss)
@@ -172,18 +167,18 @@ def main(config):
 
                 mean_val_loss = torch.mean(torch.hstack(val_loss)).item()
                 mean_train_loss = torch.mean(torch.hstack(train_loss)).item()
-                train_decAccuracy = val_att_corr / len(val_loader)
-                val_decAccuracy = train_att_corr / len(train_loader)
+                val_decAccuracy = val_att_corr / len(val_loader) * 100
 
                 scheduler.step(mean_val_loss)
 
                 # Logging metrics
-                print(f'Epoch: {epoch} | Train loss/acc: {mean_train_loss:.4f}/{train_decAccuracy:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
-                wandb.log({'epoch': epoch, 'train_loss': mean_train_loss, 'train_acc': train_decAccuracy, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy})
+                print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
+                
+                if wandb_upload:
+                    wandb.log({'epoch': epoch, 'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy})
                 
                 train_mean_loss.append(mean_train_loss)
                 val_mean_loss.append(mean_val_loss)
-                train_decAccuracies.append(train_decAccuracy)
                 val_decAccuracies.append(val_decAccuracy)
 
                 # Save best results
@@ -222,8 +217,7 @@ def main(config):
                 os.makedirs(train_folder)
             json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
             json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-            json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-            json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+            json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
 
 if __name__ == "__main__":
 
@@ -233,15 +227,19 @@ if __name__ == "__main__":
     
     # Add config argument
     parser.add_argument("--config", type=str, default='configs/replicate_results/config.yaml', help="Ruta al archivo config")
+    parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     
     args = parser.parse_args()
+
+    wandb_upload = args.wandb
     
     # Upload results to wandb
-    wandb.login()
+    if wandb_upload:
+        wandb.login()
 
     # Load corresponding config
     with open(args.config, 'r') as archivo:
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config)
+    main(config, wandb_upload=wandb_upload)
