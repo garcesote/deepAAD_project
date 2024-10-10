@@ -17,6 +17,7 @@ def main(config, wandb_upload):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
+    project = 'replicate_model_results'
 
     for exp in config['experiments']:
 
@@ -69,8 +70,7 @@ def main(config, wandb_upload):
                 else:
                     print(f'Training {model} on {subj} with {dataset} data...')
 
-            if wandb_upload:
-                run = wandb.init(project='replicate_model_results', config=exp)
+            if wandb_upload: wandb.init(project=project, name=exp_name, config=exp)
 
             # LOAD THE DATA
             train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, filt=filt, filt_path=filt_path, 
@@ -160,7 +160,7 @@ def main(config, wandb_upload):
                         
                         # Decoding accuracy of the model
                         unat_loss = correlation(stimb, preds, batch_dim=unit_output)
-                        if loss.item() > unat_loss.item():
+                        if -loss.item() > unat_loss.item():
                             val_att_corr += 1
 
                         val_loss.append(-loss)
@@ -175,16 +175,16 @@ def main(config, wandb_upload):
                 print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
                 
                 if wandb_upload:
-                    wandb.log({'epoch': epoch, 'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy})
+                    wandb.log({'train_loss': -mean_train_loss, 'val_loss': -mean_val_loss, 'val_acc': val_decAccuracy})
                 
                 train_mean_loss.append(mean_train_loss)
                 val_mean_loss.append(mean_val_loss)
                 val_decAccuracies.append(val_decAccuracy)
 
                 # Save best results
-                if val_mean_loss > best_accuracy or epoch == 0:
+                if mean_val_loss > best_accuracy or epoch == 0:
                     # best_train_loss = mean_train_accuracy
-                    best_accuracy = val_mean_loss
+                    best_accuracy = mean_val_loss
                     best_epoch = epoch
                     best_state_dict = mdl.state_dict()
             
@@ -218,6 +218,8 @@ def main(config, wandb_upload):
             json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
             json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
             json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+
+            if wandb_upload: wandb.finish()
 
 if __name__ == "__main__":
 
