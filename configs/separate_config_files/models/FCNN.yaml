@@ -1,0 +1,4 @@
+# input arguments for FCNN excluding eef_channels (depends on the dataset)
+n_hidden: 3
+dropout: 0.45
+n_samples: 50

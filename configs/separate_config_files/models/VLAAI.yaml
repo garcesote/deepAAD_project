@@ -1,0 +1,5 @@
+# input arguments for FCNN excluding eeg_channels (depends on the dataset)
+n_blocks: 4
+use_skip: True
+output_dim: 1
+dropout: 0.4

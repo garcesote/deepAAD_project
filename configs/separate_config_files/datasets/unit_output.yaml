@@ -1,0 +1,7 @@
+# dataset args input when the model predict a window of prediction on each batch (VLAAI)
+window_len: 50  
+hop: 2          
+filt: False       
+fixed: False      
+rnd_trials: False   
+unit_output: True
