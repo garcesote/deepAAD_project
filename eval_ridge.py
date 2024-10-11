@@ -124,6 +124,9 @@ def main(
             os.makedirs(decAcc_save_path)
         filename = str_win+'_accuracies'
         json.dump(dec_results, open(os.path.join(decAcc_save_path, filename),'w'))
+    
+    if wandb_upload: wandb.finish()
+            
 
 if __name__ == "__main__":
 

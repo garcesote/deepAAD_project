@@ -5,7 +5,10 @@ global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
 
 experiments:
 
-  - model: 'FCNN'
+  - name: 'population_fulsang_FCNN'
+    key: 'population'
+    dataset: 'fulsang'
+    model: 'FCNN'
     train_params:
       batch_size: 128              
       max_epoch: 200              
@@ -24,8 +27,11 @@ experiments:
       n_hidden: 3
       dropout: 0.45
       n_samples: 50
-  
-  - model: 'Conformer'
+
+  - name: 'population_fulsang_Conformer'
+    key: 'population'
+    dataset: 'fulsang'
+    model: 'Conformer'
     train_params:
       batch_size: 128              
       max_epoch: 200              
@@ -54,7 +60,10 @@ experiments:
       classifier: True
       bias: True
 
-  - model: 'CNN'
+  - name: 'population_fulsang_CNN'
+    key: 'population'
+    dataset: 'fulsang'
+    model: 'CNN'
     train_params:
       batch_size: 128              
       max_epoch: 200              
@@ -78,7 +87,10 @@ experiments:
       dropout: 0.2
       input_samples: 50
     
-  - model: 'VLAAI'
+  - name: 'population_fulsang_VLAAI'
+    key: 'population'
+    dataset: 'fulsang'
+    model: 'VLAAI'
     train_params:
       batch_size: 64              
       max_epoch: 200              

@@ -1,11 +1,9 @@
-global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
-global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
-# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
-# global_data_path: 'D:\igarcia\AAD_Data'
-
 experiments:
 
-  - model: 'FCNN'
+  - name: 'population_jaulab_FCNN'
+    key: 'population'
+    dataset: 'jaulab'
+    model: 'FCNN'
     train_params:
       batch_size: 128              
       max_epoch: 200              
@@ -24,8 +22,11 @@ experiments:
       n_hidden: 3
       dropout: 0.45
       n_samples: 50
-  
-  - model: 'Conformer'
+
+  - name: 'population_jaulab_Conformer'
+    key: 'population'
+    dataset: 'jaulab'
+    model: 'Conformer'
     train_params:
       batch_size: 128              
       max_epoch: 200              
@@ -54,7 +55,10 @@ experiments:
       classifier: True
       bias: True
 
-  - model: 'CNN'
+  - name: 'population_jaulab_CNN'
+    key: 'population'
+    dataset: 'jaulab'
+    model: 'CNN'
     train_params:
       batch_size: 128              
       max_epoch: 200              
@@ -78,7 +82,10 @@ experiments:
       dropout: 0.2
       input_samples: 50
     
-  - model: 'VLAAI'
+  - name: 'population_jaulab_VLAAI'
+    key: 'population'
+    dataset: 'jaulab'
+    model: 'VLAAI'
     train_params:
       batch_size: 64              
       max_epoch: 200              

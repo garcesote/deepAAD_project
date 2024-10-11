@@ -13,7 +13,7 @@ import os
 import json
 import wandb
 
-def main(config, wandb_upload):
+def main(config, wandb_upload, dataset, key):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
@@ -22,10 +22,8 @@ def main(config, wandb_upload):
     for exp in config['experiments']:
 
         # Global params
-        exp_name = exp['name']
-        key = exp['key']
-        dataset = exp['dataset']
         model = exp['model']
+        exp_name = ('_').join([key, dataset, model])
 
         # Config training
         train_params = exp['train_params']
@@ -41,7 +39,7 @@ def main(config, wandb_upload):
         data_path = get_data_path(global_data_path, dataset, filt=False)
         window_len = ds_config['window_len']
         hop = ds_config['hop']
-        leave_one_out = True if exp['key'] == 'subj_independent' else False
+        leave_one_out = True if key == 'subj_independent' else False
         filt = ds_config['filt']
         filt_path = get_data_path(global_data_path, dataset, filt=True) if filt else None
         fixed = ds_config['fixed']
@@ -51,8 +49,8 @@ def main(config, wandb_upload):
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
 
         # Saving paths
-        mdl_save_path = global_path + '/results/'+exp['key']+'/models'
-        metrics_save_path = global_path + '/results/'+exp['key']+'/metrics'
+        mdl_save_path = global_path + '/results/'+key+'/models'
+        metrics_save_path = global_path + '/results/'+key+'/metrics'
 
         # # Population mode that generates a model for all samples
         if key == 'population':
@@ -235,6 +233,8 @@ if __name__ == "__main__":
     # Add config argument
     parser.add_argument("--config", type=str, default='configs/replicate_results/config.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
+    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
+    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
 
@@ -249,4 +249,4 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload=wandb_upload)
+    main(config, wandb_upload, args.dataset, args.key)
