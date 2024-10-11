@@ -6,6 +6,7 @@ from models.dnn import FCNN
 from models.vlaai import VLAAI
 from models.eeg_conformer import Conformer, ConformerConfig
 from statistics import mean
+import numpy as np
 import argparse
 import yaml
 import os
@@ -16,6 +17,7 @@ def main(config, wandb_upload):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
+    project = 'replicate_model_results'
     window_list = [64, 128, 320, 640, 1600]
     
     for exp in config['experiments']:
@@ -28,12 +30,13 @@ def main(config, wandb_upload):
 
         mdl_save_path = global_path + '/results/'+exp['key']+'/models'
 
+        if wandb_upload: wandb.init(project=project, name=exp_name, tags=['evaluation'], config=exp)
+
         for eval_window in window_list:
 
             # Load config
             ds_config = exp['dataset_params']
             train_params = exp['train_params']
-
             
             unit_output = ds_config['unit_output']
             data_path = get_data_path(global_data_path, dataset, filt=False)
@@ -49,11 +52,19 @@ def main(config, wandb_upload):
             batch_size =  eval_window if unit_output else 1
             lr = float(train_params['lr'])
 
-
             if fixed: assert(dataset=='jaulab') # Only fixed subject for jaulab dataset
             dataset_name = dataset+'_fixed' if fixed else dataset
 
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+            # GET THE MODEL PATH
+            mdl_name = f'{model}_batch={train_params["batch_size"]}_block={ds_config["window_len"]}_lr={lr}'
+
+            # Add extensions to the model name depending on the params
+            if filt:
+                mdl_name = mdl_name + '_filt'
+            if rnd_trials:
+                mdl_name = mdl_name + '_rnd'
 
             # DEFINE THE SAVE PATH
             dst_save_path = os.path.join(global_path, 'Results', key, 'eval_metrics', dataset_name+'_data', model)
@@ -62,21 +73,13 @@ def main(config, wandb_upload):
             eval_results = {}
             nd_results = {} # construct a null distribution when evaluating
             dec_results = []
+            eval_mean_results = []
             
             selected_subjects = get_subjects(dataset)
 
             for subj in selected_subjects:
 
                 print(f'Evaluating {model} on window {eval_window//64}s with {dataset_name} dataset for subj {subj}')
-
-                # GET THE MODEL PATH
-                mdl_name = f'{model}_batch={batch_size}_block={ds_config["window_len"]}_lr={lr}'
-
-                # Add extensions to the model name depending on the params
-                if filt:
-                    mdl_name = mdl_name + '_filt'
-                if rnd_trials:
-                    mdl_name = mdl_name + '_rnd'
             
                 mdl_folder = os.path.join(mdl_save_path, dataset_name+'_data', mdl_name)
                 if key == 'population':
@@ -105,7 +108,6 @@ def main(config, wandb_upload):
                 test_set = CustomDataset(dataset, data_path, 'test', subj, window=window_len, hop=hop, filt=filt, filt_path=filt_path, 
                                         leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output)
                 test_loader = DataLoader(test_set, batch_size, shuffle=not unit_output, pin_memory=True)
-
                 
                 # EVALUATE THE MODEL
                 corr = []
@@ -137,8 +139,12 @@ def main(config, wandb_upload):
                 nd_results[subj] = nd_corr
                 dec_accuracy = (att_corr / len(test_loader)) * 100
                 dec_results.append(dec_accuracy)
+                eval_mean_results.append(mean(corr))
                 
                 print(f'Subject {subj} | corr_mean {mean(corr)} | decode_accuracy {dec_accuracy}')
+
+            if wandb_upload:
+                wandb.log({'window': eval_window, 'corr_subj_mean': np.mean(eval_mean_results), 'corr_subj_std': np.std(eval_mean_results), 'decAcc_subj_mean': np.mean(dec_results), 'decAcc_subj_std': np.std(dec_results)})
 
             str_win = str(eval_window//64)+'s' if 'VLAAI' in model else str(batch_size//64)+'s'
 
@@ -155,6 +161,8 @@ def main(config, wandb_upload):
                 os.makedirs(decAcc_save_path)
             filename = str_win+'_accuracies'
             json.dump(dec_results, open(os.path.join(decAcc_save_path, filename),'w'))
+
+        if wandb_upload: wandb.finish()
 
 if __name__ == "__main__":
 

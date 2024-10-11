@@ -185,14 +185,14 @@ class ClassificationHead(nn.Sequential):
         #     nn.Linear(emb_size, n_classes)
         # )
 
-        dim_tempConv = config.block_size - config.kernel_temp + 1
-        dim_chanConv = config.eeg_channels - config.kernel_chan + 1
-        dim_pool = (dim_tempConv - config.pool) // config.pool_hop + 1
-        input_size = dim_pool * dim_chanConv * config.n_embd
+        self.dim_tempConv = config.block_size - config.kernel_temp + 1
+        self.dim_chanConv = config.eeg_channels - config.kernel_chan + 1
+        self.dim_pool = (self.dim_tempConv - config.pool) // config.pool_hop + 1
+        self.input_size = self.dim_pool * self.dim_chanConv * config.n_embd
 
         if config.classifier:
             self.fc = nn.Sequential(
-                nn.Linear(input_size, 256),
+                nn.Linear(self.input_size, 256),
                 nn.ELU(),
                 nn.Dropout(config.dropout),
                 nn.Linear(256, 32),
@@ -201,7 +201,7 @@ class ClassificationHead(nn.Sequential):
                 nn.Linear(32, 1)
             )
         else:
-            self.fc = nn.Linear(input_size, 1)
+            self.fc = nn.Linear(self.input_size, 1)
 
 
     def forward(self, x):

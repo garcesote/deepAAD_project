@@ -1,5 +1,8 @@
 # input arguments for VLAAI excluding eeg_channels (depends on the dataset)
-n_blocks: 4
-use_skip: True
-output_dim: 1
-dropout: 0.4
+F1: 8
+D: 8
+F2: 64
+AP1: 2
+AP2: 4
+dropout: 0.2
+input_samples: 50

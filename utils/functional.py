@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import os
+import argparse
 
 # turn a tensor to 0 mean and std of 1 with shape (C, T) and return shape (C)   
 def normalize_eeg(tensor: torch.tensor):
@@ -183,7 +184,6 @@ def get_channels(dataset:str):
     return channels[dataset]
 
 def get_subjects(dataset:str):
-    # Select subjects you want your network to be trained on
     subjects = {
         'fulsang': ['S'+str(n) for n in range(1, 19)],
         'skl': ['S'+str(n) for n in range(1, 85)],
@@ -192,3 +192,20 @@ def get_subjects(dataset:str):
     }
     return subjects[dataset]
 
+def get_trials_len(dataset:str):
+    trial_lenghts = {
+        'skl': 3200,
+        'fulsang': 3200,
+        'jaulab': 1696
+    }
+    return trial_lenghts[dataset]
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')

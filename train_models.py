@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from models.dnn import FCNN
+from models.dnn import FCNN, CNN
 from models.vlaai import VLAAI
 from models.eeg_conformer import Conformer, ConformerConfig
 from utils.functional import get_data_path, get_channels, get_subjects, correlation
@@ -70,7 +70,28 @@ def main(config, wandb_upload):
                 else:
                     print(f'Training {model} on {subj} with {dataset} data...')
 
-            if wandb_upload: wandb.init(project=project, name=exp_name, config=exp)
+            if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=exp)
+            
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+            # LOAD THE MODEL
+            if model == 'FCNN':
+                exp['model_params']['n_chan'] = get_channels(dataset)
+                mdl = FCNN(**exp['model_params'])
+            elif model == 'CNN':
+                exp['model_params']['input_channels'] = get_channels(dataset)
+                mdl = CNN(**exp['model_params'])
+            elif model == 'VLAAI':
+                exp['model_params']['input_channels'] = get_channels(dataset)
+                mdl = VLAAI(**exp['model_params'])
+            elif model == 'Conformer':
+                exp['model_params']['eeg_channels'] = get_channels(dataset)
+                mdl_config = ConformerConfig(**exp['model_params'])
+                mdl = Conformer(mdl_config)
+            else:
+                raise ValueError('Introduce a valid model')
+            
+            mdl.to(device)
 
             # LOAD THE DATA
             train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, filt=filt, filt_path=filt_path, 
@@ -78,23 +99,6 @@ def main(config, wandb_upload):
             val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=hop, filt=filt, filt_path=filt_path, 
                                     leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output)
 
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-            # LOAD THE MODEL
-            if model == 'FCNN':
-                exp['model_params']['n_chan'] = get_channels(dataset)
-                mdl = FCNN(**exp['model_params'])
-            elif model == 'VLAAI':
-                exp['model_params']['input_channels'] = get_channels(dataset)
-                mdl = VLAAI(**exp['model_params'])
-            elif model == 'EEG_Conformer':
-                exp['model_params']['eeg_channels'] = get_channels(dataset)
-                mdl_config = ConformerConfig(**exp['model_params'])
-                mdl = Conformer(**mdl_config)
-            else:
-                raise ValueError('Introduce a valid model')
-            
-            mdl.to(device)
             
             train_loader = DataLoader(train_set, batch_size, shuffle=True, pin_memory=True)
             val_loader = DataLoader(val_set, val_bs, shuffle= not unit_output, pin_memory=True)

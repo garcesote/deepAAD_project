@@ -76,7 +76,7 @@ class CNN(nn.Module):
         layers.append(nn.Dropout2d(p=dropout))
 
         layers.append(nn.Flatten(start_dim = 1, end_dim = -1)) # concat feature and sample dimension
-        layers.append(nn.Linear(int(F2 * (input_samples / (AP1 * AP2))), 1, bias=True)) # apply linear layer to obtain the unit output
+        layers.append(nn.Linear(F2 * (input_samples // (AP1 * AP2)), 1, bias=True)) # apply linear layer to obtain the unit output
 
         self.model = nn.Sequential(*layers)
     
