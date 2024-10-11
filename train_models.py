@@ -43,11 +43,12 @@ def main(config, wandb_upload):
         hop = ds_config['hop']
         leave_one_out = True if exp['key'] == 'subj_independent' else False
         filt = ds_config['filt']
-        filt_path = get_data_path(global_data_path, dataset, filt=True)
+        filt_path = get_data_path(global_data_path, dataset, filt=True) if filt else None
         fixed = ds_config['fixed']
         rnd_trials = ds_config['rnd_trials']
         unit_output = ds_config['unit_output']
         val_bs = batch_size if unit_output else 1 # batch size equals 1 for estamiting a window when single output
+        dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
 
         # Saving paths
         mdl_save_path = global_path + '/results/'+exp['key']+'/models'
@@ -131,7 +132,6 @@ def main(config, wandb_upload):
                     
                     eeg = data['eeg'].to(device, dtype=torch.float)
                     stima = data['stima'].to(device, dtype=torch.float)
-                    stimb = data['stimb'].to(device, dtype=torch.float)
 
                     # Forward the model and calculate the loss corresponding to the neg. Pearson coef
                     with torch.autocast(device_type=device, dtype=torch.bfloat16):
@@ -158,14 +158,15 @@ def main(config, wandb_upload):
 
                         eeg = data['eeg'].to(device, dtype=torch.float)
                         stima = data['stima'].to(device, dtype=torch.float)
-                        stimb = data['stimb'].to(device, dtype=torch.float)
 
                         preds, loss = mdl(eeg, targets=stima)
                         
-                        # Decoding accuracy of the model
-                        unat_loss = correlation(stimb, preds, batch_dim=unit_output)
-                        if -loss.item() > unat_loss.item():
-                            val_att_corr += 1
+                        if dec_acc:
+                            stimb = data['stimb'].to(device, dtype=torch.float)
+                            # Decoding accuracy of the model
+                            unat_loss = correlation(stimb, preds, batch_dim=unit_output)
+                            if -loss.item() > unat_loss.item():
+                                val_att_corr += 1
 
                         val_loss.append(-loss)
 

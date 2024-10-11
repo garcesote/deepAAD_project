@@ -22,7 +22,7 @@ def main(
     # global_data_path: 'D:\igarcia\AAD_Data'
     mdl_save_path = global_path + '/Results/'+key+'/models'
     data_path = get_data_path(global_path, dataset, filt=False)
-    data_filt_path = get_data_path(global_path, dataset, filt=True)
+    data_filt_path = get_data_path(global_path, dataset, filt=True) if filt else None
 
     """
 

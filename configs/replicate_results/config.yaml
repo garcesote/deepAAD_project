@@ -5,8 +5,31 @@ global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
 
 experiments:
 
-  - name: 'population_fulsang_Conformer'
+  - name: 'population_fulsang_FCNN'
     key: 'population'
+    dataset: 'skl'
+    model: 'FCNN'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+    dataset_params:
+      window_len: 50  
+      hop: 1          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      n_hidden: 3
+      dropout: 0.45
+      n_samples: 50
+
+  - name: 'population_fulsang_Conformer'
+    key: 'subj_specific'
     dataset: 'fulsang'
     model: 'Conformer'
     train_params:
@@ -63,29 +86,6 @@ experiments:
       AP2: 4
       dropout: 0.2
       input_samples: 50
-
-  - name: 'population_fulsang_FCNN'
-    key: 'population'
-    dataset: 'fulsang'
-    model: 'FCNN'
-    train_params:
-      batch_size: 128              
-      max_epoch: 200              
-      lr: 3e-07
-      weight_decay: 1e-04                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-    dataset_params:
-      window_len: 50  
-      hop: 1          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      unit_output: True
-    model_params:
-      n_hidden: 3
-      dropout: 0.45
-      n_samples: 50
     
   - name: 'population_fulsang_VLAAI'
     key: 'population'

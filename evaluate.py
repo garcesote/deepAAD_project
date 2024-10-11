@@ -44,10 +44,11 @@ def main(config, wandb_upload):
             hop = ds_config['hop']
             leave_one_out = True if exp['key'] == 'subj_independent' else False
             filt = ds_config['filt']
-            filt_path = get_data_path(global_data_path, dataset, filt=True)
+            filt_path = get_data_path(global_data_path, dataset, filt=True) if filt else None
             fixed = ds_config['fixed']
             rnd_trials = ds_config['rnd_trials']
             time_shift = 100
+            dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
 
             batch_size =  eval_window if unit_output else 1
             lr = float(train_params['lr'])
@@ -119,18 +120,19 @@ def main(config, wandb_upload):
                         
                         eeg = data['eeg'].to(device, dtype=torch.float)
                         stima = data['stima'].to(device, dtype=torch.float)
-                        stimb = data['stimb'].to(device, dtype=torch.float)
                 
                         y_hat, loss = mdl(eeg)
 
                         # Calculates Pearson's coef. for the matching distribution and for the null one
                         nd_acc = correlation(torch.roll(stima, time_shift), y_hat, batch_dim=unit_output)
                         acc = correlation(stima, y_hat, batch_dim=unit_output)
-                        unat_acc = correlation(stimb, y_hat, batch_dim=unit_output)
-                        
-                        # Decoding accuracy
-                        if acc.item() > unat_acc.item():
-                            att_corr += 1
+
+                        if dec_acc:
+                            stimb = data['stimb'].to(device, dtype=torch.float)
+                            unat_acc = correlation(stimb, y_hat, batch_dim=unit_output)
+                            # Decoding accuracy
+                            if acc.item() > unat_acc.item():
+                                att_corr += 1
 
                         corr.append(acc.item())
                         nd_corr.append(nd_acc.item())

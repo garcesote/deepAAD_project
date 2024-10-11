@@ -271,6 +271,8 @@ class CustomDataset(Dataset):
 
         eeg = self.eeg[:, start:end] 
         stima = self.stima[start] if self.unit_ouput else self.stima[start:end]
-        stimb = self.stimb[start] if self.unit_ouput else self.stimb[start:end]
-
-        return {'eeg':eeg, 'stima':stima, 'stimb':stimb}
+        if self.dataset != 'skl':
+            stimb = self.stimb[start] if self.unit_ouput else self.stimb[start:end]
+            return {'eeg':eeg, 'stima':stima, 'stimb':stimb}
+        else:
+            return {'eeg':eeg, 'stima':stima}
