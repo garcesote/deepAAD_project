@@ -47,6 +47,7 @@ def main(config, wandb_upload, dataset, key):
         unit_output = ds_config['unit_output']
         val_bs = batch_size if unit_output else 1 # batch size equals 1 for estamiting a window when single output
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
+        val_hop = ds_config['hop'] if not unit_output else 1
 
         # Saving paths
         mdl_save_path = global_path + '/results/'+key+'/models'
@@ -85,6 +86,7 @@ def main(config, wandb_upload, dataset, key):
                 mdl = VLAAI(**exp['model_params'])
             elif model == 'Conformer':
                 exp['model_params']['eeg_channels'] = get_channels(dataset)
+                exp['model_params']['kernel_chan'] = get_channels(dataset)
                 mdl_config = ConformerConfig(**exp['model_params'])
                 mdl = Conformer(mdl_config)
             else:
@@ -95,7 +97,7 @@ def main(config, wandb_upload, dataset, key):
             # LOAD THE DATA
             train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, filt=filt, filt_path=filt_path, 
                                         leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output)
-            val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=hop, filt=filt, filt_path=filt_path, 
+            val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=val_hop, filt=filt, filt_path=filt_path, 
                                     leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output)
 
             
@@ -233,7 +235,7 @@ if __name__ == "__main__":
     # Add config argument
     parser.add_argument("--config", type=str, default='configs/replicate_results/config.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
-    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
+    parser.add_argument("--dataset", type=str, default='jaulab', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()

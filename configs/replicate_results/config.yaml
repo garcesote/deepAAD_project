@@ -29,7 +29,7 @@ experiments:
     train_params:
       batch_size: 128              
       max_epoch: 200              
-      lr: 2e-05
+      lr: 1e-06
       weight_decay: 1e-08                      
       early_stopping_patience: 5
       scheduler_patience: 2
@@ -45,7 +45,6 @@ experiments:
       enc_layers: 2
       n_head: 4
       n_embd: 40
-      kernel_chan: 64
       kernel_temp: 8
       pool: 20
       pool_hop: 4

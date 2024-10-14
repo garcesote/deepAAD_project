@@ -44,9 +44,9 @@ def main(
         model = model + '_rnd'
 
     # DEFINE THE SAVE PATH
-    dst_save_path = os.path.join(global_path, 'Results', key, 'eval_metrics', dataset_name+'_data', model)
-    decAcc_save_path = os.path.join(global_path, 'Results', key, 'decode_accuracy', dataset_name+'_data', model)
-    mdl_load_folder = os.path.join(global_path, 'Results', key, 'models', dataset+'_data')
+    dst_save_path = os.path.join(global_path, 'results', key, 'eval_metrics', dataset_name+'_data', model)
+    decAcc_save_path = os.path.join(global_path, 'results', key, 'decode_accuracy', dataset_name+'_data', model)
+    mdl_load_folder = os.path.join(global_path, 'results', key, 'models', dataset+'_data')
     
     exp_name = ('_').join([key, dataset_name, model])
     if wandb_upload: wandb.init(project=project, name=exp_name, tags=['evaluation_ridge'])

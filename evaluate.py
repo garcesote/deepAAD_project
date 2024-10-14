@@ -2,7 +2,7 @@ import torch
 from utils.functional import get_data_path, get_channels, get_subjects, get_filename, correlation
 from utils.datasets import CustomDataset
 from torch.utils.data import DataLoader
-from models.dnn import FCNN
+from models.dnn import FCNN, CNN
 from models.vlaai import VLAAI
 from models.eeg_conformer import Conformer, ConformerConfig
 from statistics import mean
@@ -39,7 +39,7 @@ def main(config, wandb_upload, dataset, key):
             unit_output = ds_config['unit_output']
             data_path = get_data_path(global_data_path, dataset, filt=False)
             window_len = ds_config['window_len'] if unit_output else eval_window
-            hop = ds_config['hop']
+            hop = ds_config['hop'] if not unit_output else 1
             leave_one_out = True if key == 'subj_independent' else False
             filt = ds_config['filt']
             filt_path = get_data_path(global_data_path, dataset, filt=True) if filt else None
@@ -66,8 +66,8 @@ def main(config, wandb_upload, dataset, key):
                 mdl_name = mdl_name + '_rnd'
 
             # DEFINE THE SAVE PATH
-            dst_save_path = os.path.join(global_path, 'Results', key, 'eval_metrics', dataset_name+'_data', model)
-            decAcc_save_path = os.path.join(global_path, 'Results', key, 'decode_accuracy', dataset_name+'_data', model)
+            dst_save_path = os.path.join(global_path, 'results', key, 'eval_metrics', dataset_name+'_data', model)
+            decAcc_save_path = os.path.join(global_path, 'results', key, 'decode_accuracy', dataset_name+'_data', model)
 
             eval_results = {}
             nd_results = {} # construct a null distribution when evaluating
@@ -90,16 +90,19 @@ def main(config, wandb_upload, dataset, key):
                 if model == 'FCNN':
                     exp['model_params']['n_chan'] = get_channels(dataset)
                     mdl = FCNN(**exp['model_params'])
+                elif model == 'CNN':
+                    exp['model_params']['input_channels'] = get_channels(dataset)
+                    mdl = CNN(**exp['model_params'])
                 elif model == 'VLAAI':
                     exp['model_params']['input_channels'] = get_channels(dataset)
                     mdl = VLAAI(**exp['model_params'])
-                elif model == 'EEG_Conformer':
+                elif model == 'Conformer':
                     exp['model_params']['eeg_channels'] = get_channels(dataset)
                     mdl_config = ConformerConfig(**exp['model_params'])
-                    mdl = Conformer(**mdl_config)
+                    mdl = Conformer(mdl_config)
                 else:
                     raise ValueError('Introduce a valid model')
-
+            
                 mdl.load_state_dict(torch.load(os.path.join(mdl_folder, mdl_filename), map_location=torch.device(device)))
                 mdl.to(device)
 
@@ -118,7 +121,7 @@ def main(config, wandb_upload, dataset, key):
                         
                         eeg = data['eeg'].to(device, dtype=torch.float)
                         stima = data['stima'].to(device, dtype=torch.float)
-                
+                        
                         y_hat, loss = mdl(eeg)
 
                         # Calculates Pearson's coef. for the matching distribution and for the null one

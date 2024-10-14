@@ -285,6 +285,6 @@ class Conformer(nn.Sequential):
 
         if targets is not None:
             loss = - correlation(preds, targets, batch_dim=True)
-            return preds, loss
         else:
-            return preds
+            loss = None
+        return preds, loss

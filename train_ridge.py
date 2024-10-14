@@ -16,13 +16,13 @@ def main(
     ):
 
     # Saving path parameters
-    global_path = 'C:/Users/jaulab/Desktop/'
-    global_path = 'C:/Users/jaulab/Desktop/AAD/Data'
+    global_path = 'C:/Users/jaulab/Desktop/deepAAD_project'
+    global_data_path = 'C:/Users/jaulab/Desktop/AAD/Data'
     # global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
     # global_data_path: 'D:\igarcia\AAD_Data'
-    mdl_save_path = global_path + '/Results/'+key+'/models'
-    data_path = get_data_path(global_path, dataset, filt=False)
-    data_filt_path = get_data_path(global_path, dataset, filt=True) if filt else None
+    mdl_save_path = global_path + '/results/'+key+'/models'
+    data_path = get_data_path(global_data_path, dataset, filt=False)
+    data_filt_path = get_data_path(global_data_path, dataset, filt=True) if filt else None
 
     """
 
