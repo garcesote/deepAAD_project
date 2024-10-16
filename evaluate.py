@@ -97,6 +97,7 @@ def main(config, wandb_upload, dataset, key):
                     exp['model_params']['input_channels'] = get_channels(dataset)
                     mdl = VLAAI(**exp['model_params'])
                 elif model == 'Conformer':
+                    exp['model_params']['kernel_chan'] = get_channels(dataset)
                     exp['model_params']['eeg_channels'] = get_channels(dataset)
                     mdl_config = ConformerConfig(**exp['model_params'])
                     mdl = Conformer(mdl_config)
@@ -176,7 +177,7 @@ if __name__ == "__main__":
     # Add config argument
     parser.add_argument("--config", type=str, default='configs/replicate_results/config.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
-    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
+    parser.add_argument("--dataset", type=str, default='jaulab', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()

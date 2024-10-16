@@ -13,17 +13,18 @@ import os
 import json
 import wandb
 
-def main(config, wandb_upload, dataset, key):
+def main(config, wandb_upload, dataset, key, tunning):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'replicate_model_results'
+    project = 'conformer_tunning'
 
     for exp in config['experiments']:
 
         # Global params
         model = exp['model']
-        exp_name = ('_').join([key, dataset, model])
+        # exp_name = ('_').join([key, dataset, model])
+        exp_name = 'embed_size_' + dataset
 
         # Config training
         train_params = exp['train_params']
@@ -69,8 +70,6 @@ def main(config, wandb_upload, dataset, key):
                     print(f'Training {model} leaving out {subj} with {dataset} data...')
                 else:
                     print(f'Training {model} on {subj} with {dataset} data...')
-
-            if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=exp)
             
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -93,13 +92,18 @@ def main(config, wandb_upload, dataset, key):
                 raise ValueError('Introduce a valid model')
             
             mdl.to(device)
+            mdl_size = sum(p.numel() for p in mdl.parameters())
+            exp['mdl_size'] = mdl_size
+            print(f'Conformer size: {mdl_size / 1e06:.2f}M')
+            print(f'Conformer layers: {exp["model_params"]["enc_layers"]}, Conformer heads: {exp["model_params"]["n_head"]}, Conformer pool: {exp["model_params"]["pool"]}, Conformer pool_hop: {exp["model_params"]["pool_hop"]}')
+
+            if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=exp)
 
             # LOAD THE DATA
             train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, filt=filt, filt_path=filt_path, 
                                         leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output)
             val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=val_hop, filt=filt, filt_path=filt_path, 
                                     leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output)
-
             
             train_loader = DataLoader(train_set, batch_size, shuffle=True, pin_memory=True)
             val_loader = DataLoader(val_set, val_bs, shuffle= not unit_output, pin_memory=True)
@@ -195,34 +199,35 @@ def main(config, wandb_upload, dataset, key):
             
             dataset_filename = dataset+'_fixed' if fixed and dataset == 'jaulab' else dataset
 
-            # Save best final model
-            mdl_name = f'{model}_batch={batch_size}_block={window_len}_lr={lr}'
-            prefix = model if key == 'population' else subj
+            if not tunning:
+                # Save best final model
+                mdl_name = f'{model}_batch={batch_size}_block={window_len}_lr={lr}'
+                prefix = model if key == 'population' else subj
 
-            # Add extensions to the model name depending on the params
-            if filt:
-                mdl_name = mdl_name + '_filt'
-            if rnd_trials:
-                mdl_name = mdl_name + '_rnd'
-        
-            mdl_folder = os.path.join(mdl_save_path, dataset_filename+'_data', mdl_name)
-            if not os.path.exists(mdl_folder):
-                os.makedirs(mdl_folder)
-            torch.save(
-                best_state_dict, 
-                os.path.join(mdl_folder, f'{prefix}_epoch={epoch}_acc={best_accuracy:.4f}.ckpt')
-            )
+                # Add extensions to the model name depending on the params
+                if filt:
+                    mdl_name = mdl_name + '_filt'
+                if rnd_trials:
+                    mdl_name = mdl_name + '_rnd'
+            
+                mdl_folder = os.path.join(mdl_save_path, dataset_filename+'_data', mdl_name)
+                if not os.path.exists(mdl_folder):
+                    os.makedirs(mdl_folder)
+                torch.save(
+                    best_state_dict, 
+                    os.path.join(mdl_folder, f'{prefix}_epoch={epoch}_acc={best_accuracy:.4f}.ckpt')
+                )
 
-            # Save corresponding train and val metrics
-            val_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'val')
-            if not os.path.exists(val_folder):
-                os.makedirs(val_folder)
-            train_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'train')
-            if not os.path.exists(train_folder):
-                os.makedirs(train_folder)
-            json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-            json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-            json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+                # Save corresponding train and val metrics
+                val_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'val')
+                if not os.path.exists(val_folder):
+                    os.makedirs(val_folder)
+                train_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'train')
+                if not os.path.exists(train_folder):
+                    os.makedirs(train_folder)
+                json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+                json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+                json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
 
             if wandb_upload: wandb.finish()
 
@@ -235,7 +240,8 @@ if __name__ == "__main__":
     # Add config argument
     parser.add_argument("--config", type=str, default='configs/replicate_results/config.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
-    parser.add_argument("--dataset", type=str, default='jaulab', help="Dataset")
+    parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
+    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
@@ -251,4 +257,4 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, args.key)
+    main(config, wandb_upload, args.dataset, args.key, args.tunning)

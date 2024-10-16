@@ -29,7 +29,7 @@ class PatchEmbedding(nn.Module):
             nn.Conv2d(config.n_embd, config.n_embd, (config.kernel_chan, 1), (1, 1)), # channel convolution
             nn.BatchNorm2d(config.n_embd),
             nn.ELU(),
-            nn.AvgPool2d((1, config.pool), (1, config.pool_hop)),  # pooling acts as slicing to obtain 'patch' along the time dimension as in ViT
+            nn.AvgPool2d((1, config.pool), (1, config.pool_hop)), # pooling acts as slicing to obtain 'patch' along the time dimension as in ViT
             nn.Dropout(config.dropout),
         ]
         )
@@ -250,7 +250,7 @@ class Conformer(nn.Sequential):
         self.classif = ClassificationHead(config)
 
         # report number of parameters
-        print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
+        print("Number of parameters: %.2fM" % (self.get_num_params()/1e6,))
     
     def get_num_params(self):
         """
