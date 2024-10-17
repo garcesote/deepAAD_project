@@ -36,7 +36,7 @@ class PatchEmbedding(nn.Module):
 
         self.projection = nn.Conv2d(config.n_embd, config.n_embd, (1, 1), stride=(1, 1))  # transpose, conv could enhance fiting ability slightly
         # self.projection = nn.Sequential(
-        #     nn.Conv2d(config.n_embd, config.n_embd, (1, 1), stride=(1, 1)),  # transpose, conv could enhance fiting ability slightly
+        #     nn.Conv2d(config.n_embd, config.n_embd, (1, 1), stride=(1, 1)),  # transpose, conv could enhance fitting ability slightly
         #     # Rearrange('b e (h) (w) -> b (h w) e'),
         # )
 
@@ -261,6 +261,16 @@ class Conformer(nn.Sequential):
         """
         n_params = sum(p.numel() for p in self.parameters())
         return n_params
+    
+    def init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            nn.init.xavier_normal_(module.weight)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        if isinstance(module, nn.Conv2d):
+            nn.init.kaiming_normal(module.weight, mode= 'fan_out', nonlinearity='relu')
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
 
     def forward(self, x, targets=None):
 

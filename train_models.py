@@ -18,16 +18,16 @@ def main(config, wandb_upload, dataset, key, tunning):
     global_path = config['global_path']
     global_data_path = config['global_data_path']
     project = 'conformer_tunning'
+    exp_name = config['exp_name'] + '_' + dataset
 
-    for exp in config['experiments']:
+    for run in config['runs']:
 
         # Global params
-        model = exp['model']
+        model = run['model']
         # exp_name = ('_').join([key, dataset, model])
-        exp_name = 'embed_size_' + dataset
 
         # Config training
-        train_params = exp['train_params']
+        train_params = run['train_params']
         batch_size = train_params['batch_size']
         max_epoch = train_params['max_epoch']
         lr = float(train_params['lr'])
@@ -36,7 +36,7 @@ def main(config, wandb_upload, dataset, key, tunning):
         early_stopping_patience = train_params['early_stopping_patience']
 
         # Config dataset
-        ds_config = exp['dataset_params']
+        ds_config = run['dataset_params']
         data_path = get_data_path(global_data_path, dataset, filt=False)
         window_len = ds_config['window_len']
         hop = ds_config['hop']
@@ -65,7 +65,7 @@ def main(config, wandb_upload, dataset, key, tunning):
             if key == 'population':
                 print(f'Training {model} on all subjects with {dataset} data...')
             else:
-                exp['subj'] = subj
+                run['subj'] = subj
                 if key == 'subj_independent':
                     print(f'Training {model} leaving out {subj} with {dataset} data...')
                 else:
@@ -75,29 +75,31 @@ def main(config, wandb_upload, dataset, key, tunning):
 
             # LOAD THE MODEL
             if model == 'FCNN':
-                exp['model_params']['n_chan'] = get_channels(dataset)
-                mdl = FCNN(**exp['model_params'])
+                run['model_params']['n_chan'] = get_channels(dataset)
+                mdl = FCNN(**run['model_params'])
             elif model == 'CNN':
-                exp['model_params']['input_channels'] = get_channels(dataset)
-                mdl = CNN(**exp['model_params'])
+                run['model_params']['input_channels'] = get_channels(dataset)
+                mdl = CNN(**run['model_params'])
             elif model == 'VLAAI':
-                exp['model_params']['input_channels'] = get_channels(dataset)
-                mdl = VLAAI(**exp['model_params'])
+                run['model_params']['input_channels'] = get_channels(dataset)
+                mdl = VLAAI(**run['model_params'])
             elif model == 'Conformer':
-                exp['model_params']['eeg_channels'] = get_channels(dataset)
-                exp['model_params']['kernel_chan'] = get_channels(dataset)
-                mdl_config = ConformerConfig(**exp['model_params'])
+                run['model_params']['eeg_channels'] = get_channels(dataset)
+                run['model_params']['kernel_chan'] = get_channels(dataset)
+                mdl_config = ConformerConfig(**run['model_params'])
                 mdl = Conformer(mdl_config)
             else:
                 raise ValueError('Introduce a valid model')
             
             mdl.to(device)
             mdl_size = sum(p.numel() for p in mdl.parameters())
-            exp['mdl_size'] = mdl_size
-            print(f'Conformer size: {mdl_size / 1e06:.2f}M')
-            print(f'Conformer layers: {exp["model_params"]["enc_layers"]}, Conformer heads: {exp["model_params"]["n_head"]}, Conformer pool: {exp["model_params"]["pool"]}, Conformer pool_hop: {exp["model_params"]["pool_hop"]}')
-
-            if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=exp)
+            run['mdl_size'] = mdl_size
+            print(f'Model size: {mdl_size / 1e06:.2f}M')
+            # WEIGHT INITILAIZATION
+            if exp_name == 'bool_params':
+                if run['init_weights']: mdl.apply(mdl.init_weights)
+    
+            if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
 
             # LOAD THE DATA
             train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, filt=filt, filt_path=filt_path, 

@@ -4,48 +4,132 @@ global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
 # global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
 # global_data_path: 'D:\igarcia\AAD_Data'
 
-exp_name: 'mdl_size_and_complexity'
+exp_name: 'window_size'
 
 runs:
-  
-  # - model: 'Conformer'
-  #   train_params:
-  #     batch_size: 128              
-  #     max_epoch: 200              
-  #     lr: 1e-06
-  #     weight_decay: 1e-04                     
-  #     early_stopping_patience: 5
-  #     scheduler_patience: 2
-  #   dataset_params:
-  #     window_len: 50  
-  #     hop: 1          
-  #     filt: False       
-  #     fixed: False      
-  #     rnd_trials: False   
-  #     unit_output: True
-  #   model_params:
-  #     mlp_ratio: 1
-  #     enc_layers: 1
-  #     n_head: 1
-  #     n_embd: 40
-  #     kernel_temp: 8
-  #     pool: 25
-  #     pool_hop: 10
-  #     block_size: 50 # 2s
-  #     dropout: 0.4
-  #     classifier: True
-  #     bias: True
 
-  - model: 'Conformer'
+  - model: 'Conformer' # 20 block sample
     train_params:
       batch_size: 128              
       max_epoch: 200              
       lr: 1e-06
-      weight_decay: 1e-04                      
+      weight_decay: 1e-04                     
       early_stopping_patience: 5
       scheduler_patience: 2
     dataset_params:
-      window_len: 50  
+      window_len: 20 
+      hop: 1          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      mlp_ratio: 2
+      enc_layers: 4
+      n_head: 4
+      n_embd: 40
+      kernel_temp: 8
+      pool: 10
+      pool_hop: 4
+      block_size: 20
+      dropout: 0.4
+      classifier: True
+      bias: True
+
+  - model: 'Conformer' # 20 block sample small pool
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                     
+      early_stopping_patience: 5
+      scheduler_patience: 2
+    dataset_params:
+      window_len: 20 
+      hop: 1          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      mlp_ratio: 2
+      enc_layers: 4
+      n_head: 4
+      n_embd: 40
+      kernel_temp: 8
+      pool: 5
+      pool_hop: 2
+      block_size: 20
+      dropout: 0.4
+      classifier: True
+      bias: True
+
+  - model: 'Conformer' # 128 samples
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                     
+      early_stopping_patience: 5
+      scheduler_patience: 2
+    dataset_params:
+      window_len: 128
+      hop: 1          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      mlp_ratio: 2
+      enc_layers: 2
+      n_head: 2
+      n_embd: 40
+      kernel_temp: 8
+      pool: 10
+      pool_hop: 4
+      block_size: 128
+      dropout: 0.4
+      classifier: True
+      bias: True
+
+  - model: 'Conformer' # 320 samples
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                     
+      early_stopping_patience: 5
+      scheduler_patience: 2
+    dataset_params:
+      window_len: 320
+      hop: 1          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      mlp_ratio: 2
+      enc_layers: 2
+      n_head: 2
+      n_embd: 40
+      kernel_temp: 8
+      pool: 10
+      pool_hop: 4
+      block_size: 320
+      dropout: 0.4
+      classifier: True
+      bias: True
+
+  - model: 'Conformer' # 320 samples big pool
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                     
+      early_stopping_patience: 5
+      scheduler_patience: 2
+    dataset_params:
+      window_len: 320
       hop: 1          
       filt: False       
       fixed: False      
@@ -59,21 +143,21 @@ runs:
       kernel_temp: 8
       pool: 20
       pool_hop: 5
-      block_size: 50 # 2s
+      block_size: 320
       dropout: 0.4
       classifier: True
       bias: True
 
-  - model: 'Conformer'
+  - model: 'Conformer' # 320 samples bigger pool
     train_params:
       batch_size: 128              
       max_epoch: 200              
       lr: 1e-06
-      weight_decay: 1e-04                      
+      weight_decay: 1e-04                     
       early_stopping_patience: 5
       scheduler_patience: 2
     dataset_params:
-      window_len: 50  
+      window_len: 320
       hop: 1          
       filt: False       
       fixed: False      
@@ -81,153 +165,13 @@ runs:
       unit_output: True
     model_params:
       mlp_ratio: 2
-      enc_layers: 4
-      n_head: 4
+      enc_layers: 2
+      n_head: 2
       n_embd: 40
       kernel_temp: 8
-      pool: 20
-      pool_hop: 4
-      block_size: 50 # 2s
-      dropout: 0.4
-      classifier: True
-      bias: True
-
-  - model: 'Conformer'
-    train_params:
-      batch_size: 128              
-      max_epoch: 200              
-      lr: 1e-06
-      weight_decay: 1e-04                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-    dataset_params:
-      window_len: 50  
-      hop: 1          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      unit_output: True
-    model_params:
-      mlp_ratio: 2
-      enc_layers: 4
-      n_head: 4
-      n_embd: 40
-      kernel_temp: 8
-      pool: 10
-      pool_hop: 4
-      block_size: 50 # 2s
-      dropout: 0.4
-      classifier: True
-      bias: True
-
-  - model: 'Conformer'
-    train_params:
-      batch_size: 128              
-      max_epoch: 200              
-      lr: 1e-06
-      weight_decay: 1e-04                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-    dataset_params:
-      window_len: 50  
-      hop: 1          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      unit_output: True
-    model_params:
-      mlp_ratio: 2
-      enc_layers: 4
-      n_head: 4
-      n_embd: 40
-      kernel_temp: 8
-      pool: 5
-      pool_hop: 2
-      block_size: 50 # 2s
-      dropout: 0.4
-      classifier: True
-      bias: True
-
-  - model: 'Conformer'
-    train_params:
-      batch_size: 128              
-      max_epoch: 200              
-      lr: 1e-06
-      weight_decay: 1e-04                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-    dataset_params:
-      window_len: 50  
-      hop: 1          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      unit_output: True
-    model_params:
-      mlp_ratio: 4
-      enc_layers: 8
-      n_head: 4
-      n_embd: 40
-      kernel_temp: 8
-      pool: 5
-      pool_hop: 2
-      block_size: 50 # 2s
-      dropout: 0.4
-      classifier: True
-      bias: True
-
-  - model: 'Conformer'
-    train_params:
-      batch_size: 128              
-      max_epoch: 200              
-      lr: 1e-06
-      weight_decay: 1e-04                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-    dataset_params:
-      window_len: 50  
-      hop: 1          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      unit_output: True
-    model_params:
-      mlp_ratio: 4
-      enc_layers: 16
-      n_head: 4
-      n_embd: 40
-      kernel_temp: 8
-      pool: 10
-      pool_hop: 4
-      block_size: 50 # 2s
-      dropout: 0.4
-      classifier: True
-      bias: True
-
-  - model: 'Conformer'
-    train_params:
-      batch_size: 128              
-      max_epoch: 200              
-      lr: 1e-06
-      weight_decay: 1e-04                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-    dataset_params:
-      window_len: 50  
-      hop: 1          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      unit_output: True
-    model_params:
-      mlp_ratio: 2
-      enc_layers: 4
-      n_head: 8
-      n_embd: 40
-      kernel_temp: 8
-      pool: 10
-      pool_hop: 4
-      block_size: 50 # 2s
+      pool: 64
+      pool_hop: 16
+      block_size: 320
       dropout: 0.4
       classifier: True
       bias: True

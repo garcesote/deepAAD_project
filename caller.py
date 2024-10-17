@@ -9,6 +9,7 @@ import subprocess
 #     ]  
 # print(cmd)
 # subprocess.run(cmd)
+
 def run_experiment(dataset, key, train=True, eval=True, train_ridge=True, eval_ridge=True):
     # train
     cmd = [
@@ -52,8 +53,44 @@ def run_experiment(dataset, key, train=True, eval=True, train_ridge=True, eval_r
 # run_experiment('fulsang', 'population', train=False, train_ridge=False)
 # run_experiment('jaulab', 'population', train=False, train_ridge=False, eval_ridge=False)
 # run_experiment('skl', 'population')
-run_experiment('fulsang', 'subj_specific', train=False, train_ridge=False, eval_ridge=False)
+# run_experiment('fulsang', 'subj_specific', train=False)
 # run_experiment('jaulab', 'subj_specific')
 # run_experiment('skl', 'population')
+
+# hop_sim
+cmd = [
+        "py", "train_models.py", 
+        "--config", "configs/conformer_tunning/hop_size.yaml",
+        "--wandb",
+        "--tunning",
+        "--key", 'population',
+        "--dataset", 'fulsang'
+    ]  
+print(cmd)
+subprocess.run(cmd)
+
+# window_sim
+cmd = [
+        "py", "train_models.py", 
+        "--config", "configs/conformer_tunning/window_size.yaml",
+        "--wandb",
+        "--tunning",
+        "--key", 'population',
+        "--dataset", 'fulsang'
+    ]  
+print(cmd)
+subprocess.run(cmd)
+
+# bool_sim
+cmd = [
+        "py", "train_models.py", 
+        "--config", "configs/conformer_tunning/bool_params.yaml",
+        "--wandb",
+        "--tunning",
+        "--key", 'population',
+        "--dataset", 'fulsang'
+    ]  
+print(cmd)
+subprocess.run(cmd)
 
 
