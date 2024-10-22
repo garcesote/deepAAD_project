@@ -17,24 +17,25 @@ def main(config, wandb_upload, dataset, key):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'replicate_model_results'
+    project = 'gradient_trcking'
     window_list = [64, 128, 320, 640, 1600]
+    exp_name = config['exp_name'] + '_' + dataset
     
-    for exp in config['experiments']:
+    for run in config['runs']:
 
         # Global params
-        model = exp['model']
-        exp_name = ('_').join([key, dataset, model])
+        model = run['model']
+        # exp_name = ('_').join([key, dataset, model])
 
-        mdl_save_path = global_path + '/results/'+key+'/models'
+        mdl_save_path = os.path.join(global_path, 'results', exp_name, key, 'metrics')
 
-        if wandb_upload: wandb.init(project=project, name=exp_name, tags=['evaluation'], config=exp)
+        if wandb_upload: wandb.init(project=project, name=exp_name, tags=['evaluation'], config=run)
 
         for eval_window in window_list:
 
             # Load config
-            ds_config = exp['dataset_params']
-            train_params = exp['train_params']
+            ds_config = run['dataset_params']
+            train_params = run['train_params']
             
             unit_output = ds_config['unit_output']
             data_path = get_data_path(global_data_path, dataset, filt=False)
@@ -66,8 +67,8 @@ def main(config, wandb_upload, dataset, key):
                 mdl_name = mdl_name + '_rnd'
 
             # DEFINE THE SAVE PATH
-            dst_save_path = os.path.join(global_path, 'results', key, 'eval_metrics', dataset_name+'_data', model)
-            decAcc_save_path = os.path.join(global_path, 'results', key, 'decode_accuracy', dataset_name+'_data', model)
+            dst_save_path = os.path.join(global_path, 'results', exp_name, key, 'eval_metrics', dataset_name+'_data', model)
+            decAcc_save_path = os.path.join(global_path, 'results', exp_name, key, 'decode_accuracy', dataset_name+'_data', model)
 
             eval_results = {}
             nd_results = {} # construct a null distribution when evaluating
@@ -88,18 +89,18 @@ def main(config, wandb_upload, dataset, key):
                 
                 # LOAD THE MODEL
                 if model == 'FCNN':
-                    exp['model_params']['n_chan'] = get_channels(dataset)
-                    mdl = FCNN(**exp['model_params'])
+                    run['model_params']['n_chan'] = get_channels(dataset)
+                    mdl = FCNN(**run['model_params'])
                 elif model == 'CNN':
-                    exp['model_params']['input_channels'] = get_channels(dataset)
-                    mdl = CNN(**exp['model_params'])
+                    run['model_params']['input_channels'] = get_channels(dataset)
+                    mdl = CNN(**run['model_params'])
                 elif model == 'VLAAI':
-                    exp['model_params']['input_channels'] = get_channels(dataset)
-                    mdl = VLAAI(**exp['model_params'])
+                    run['model_params']['input_channels'] = get_channels(dataset)
+                    mdl = VLAAI(**run['model_params'])
                 elif model == 'Conformer':
-                    exp['model_params']['kernel_chan'] = get_channels(dataset)
-                    exp['model_params']['eeg_channels'] = get_channels(dataset)
-                    mdl_config = ConformerConfig(**exp['model_params'])
+                    run['model_params']['kernel_chan'] = get_channels(dataset)
+                    run['model_params']['eeg_channels'] = get_channels(dataset)
+                    mdl_config = ConformerConfig(**run['model_params'])
                     mdl = Conformer(mdl_config)
                 else:
                     raise ValueError('Introduce a valid model')
@@ -177,7 +178,7 @@ if __name__ == "__main__":
     # Add config argument
     parser.add_argument("--config", type=str, default='configs/replicate_results/config.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
-    parser.add_argument("--dataset", type=str, default='jaulab', help="Dataset")
+    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()

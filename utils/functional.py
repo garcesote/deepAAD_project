@@ -209,3 +209,15 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+    
+def set_seeds(seed: int=42):
+    """ Set random seeds for torch operations
+
+    Args:
+        seed (int, optional): Random seed to set. Defaults 42.
+
+    """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    np.random.seed(seed)
+

@@ -3,17 +3,19 @@ global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
 # global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
 # global_data_path: 'D:\igarcia\AAD_Data'
 
-experiments:
-  - model: 'Conformer'
+exp_name: 'models_comparison'
+
+runs:
+  - model: 'Conformer' # modelo con los parámetros de modelo óptimos
     train_params:
       batch_size: 128              
       max_epoch: 200              
       lr: 1e-06
-      weight_decay: 1e-08                      
+      weight_decay: 1e-04                     
       early_stopping_patience: 5
       scheduler_patience: 2
     dataset_params:
-      window_len: 50  
+      window_len: 320 
       hop: 1          
       filt: False       
       fixed: False      
@@ -21,13 +23,13 @@ experiments:
       unit_output: True
     model_params:
       mlp_ratio: 2
-      enc_layers: 2
+      enc_layers: 4
       n_head: 4
       n_embd: 40
       kernel_temp: 8
-      pool: 20
+      pool: 10
       pool_hop: 4
-      block_size: 50 # 2s
+      block_size: 320
       dropout: 0.4
       classifier: True
       bias: True

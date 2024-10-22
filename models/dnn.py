@@ -56,29 +56,33 @@ class CNN(nn.Module):
         self.input_channels = input_channels
         self.input_samples = input_samples
 
-        layers = []
-        
         # input with shape (B, 1, T, C) => outputs (B, F1, T, C)
-        layers.append(nn.Conv2d(1, F1, kernel_size=(3, 1), padding=(1,0))) # temporal convolution => model intra-channel dependencies
-        layers.append(nn.BatchNorm2d(F1)) # 1st batch norm
+        self.temporal = nn.Sequential(
+            nn.Conv2d(1, F1, kernel_size=(3, 1), padding=(1,0)), # temporal convolution => model intra-channel dependencies
+            nn.BatchNorm2d(F1) # 1st batch norm
+        )
         
-        layers.append(nn.Conv2d(F1, F1*D, (1,input_channels), groups=F1)) # spatial convolution => channel dimension to 1 model inter-channel dependencies
-        layers.append(nn.BatchNorm2d(F1*D)) # 2nd batch norm
-        layers.append(nn.ELU(alpha=1.0)) # act. function
-        layers.append(nn.AvgPool2d((AP1, 1))) # average pooling by a factor of 2
-        layers.append(nn.Dropout2d(p=dropout)) # dropout
+        self.spatial = nn.Sequential(
+            nn.Conv2d(F1, F1*D, (1,input_channels), groups=F1), # spatial convolution => channel dimension to 1 model inter-channel dependencies
+            nn.BatchNorm2d(F1*D), # 2nd batch norm
+            nn.ELU(alpha=1.0), # act. function
+            nn.AvgPool2d((AP1, 1)), # average pooling by a factor of 2
+            nn.Dropout2d(p=dropout) # dropout
+        )
         
-        layers.append(nn.Conv2d(F1*D, F1*D, kernel_size=3, padding=1, groups=F1*D)) # depthwise separable convolution
-        layers.append(nn.Conv2d(F1*D, F2, kernel_size=1)) # pointwise
-        layers.append(nn.BatchNorm2d(F2)) # 3rd batch norm
-        layers.append(nn.ELU(alpha=1.0)) 
-        layers.append(nn.AvgPool2d((AP2, 1))) # average pooling by a factor of 5
-        layers.append(nn.Dropout2d(p=dropout))
-
-        layers.append(nn.Flatten(start_dim = 1, end_dim = -1)) # concat feature and sample dimension
-        layers.append(nn.Linear(F2 * (input_samples // (AP1 * AP2)), 1, bias=True)) # apply linear layer to obtain the unit output
-
-        self.model = nn.Sequential(*layers)
+        self.depthwise = nn.Sequential(
+            nn.Conv2d(F1*D, F1*D, kernel_size=3, padding=1, groups=F1*D), # depthwise separable convolution
+            nn.Conv2d(F1*D, F2, kernel_size=1), # pointwise
+            nn.BatchNorm2d(F2), # 3rd batch norm
+            nn.ELU(alpha=1.0), 
+            nn.AvgPool2d((AP2, 1)), # average pooling by a factor of 5
+            nn.Dropout2d(p=dropout)
+        )
+        
+        self.classifier = nn.Sequential(
+            nn.Flatten(start_dim = 1, end_dim = -1), # concat feature and sample dimension
+            nn.Linear(F2 * (input_samples // (AP1 * AP2)), 1, bias=True) # apply linear layer to obtain the unit output
+        )
     
     def forward(self, input, targets = None):
         # input shape must be (batch, n_chan, n_samples)
@@ -86,9 +90,14 @@ class CNN(nn.Module):
 
             # add feature dimension and 
             input = input.transpose(1, 2)
-            input = input.unsqueeze(1) 
+            x = input.unsqueeze(1) 
 
-            preds = torch.squeeze(self.model(input))
+            x = self.temporal(x)
+            x = self.spatial(x)
+            x = self.depthwise(x)
+            x = self.classifier(x)
+            preds = torch.squeeze(x)
+
             if targets is None:
                 loss = None
             else:

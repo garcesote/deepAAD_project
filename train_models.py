@@ -4,7 +4,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from models.dnn import FCNN, CNN
 from models.vlaai import VLAAI
 from models.eeg_conformer import Conformer, ConformerConfig
-from utils.functional import get_data_path, get_channels, get_subjects, correlation
+from utils.functional import get_data_path, get_channels, get_subjects, set_seeds, correlation
 from utils.datasets import CustomDataset
 from tqdm import tqdm
 import argparse
@@ -13,12 +13,28 @@ import os
 import json
 import wandb
 
-def main(config, wandb_upload, dataset, key, tunning):
+desired_layers = ['classif.fc.0.weight', 
+                  'classif.fc.6.weight', 
+                  'embed.shallownet.0.weight',
+                  'embed.shallownet.2.weight',
+                  'encoder.0.attn.w_q.weight',
+                  'encoder.3.attn.w_q.weight',
+                  'encoder.0.mlp.c_fc.weight',
+                  'encoder.3.mlp.c_fc.weight',
+                ]
+
+def main(config, wandb_upload, dataset, key, tunning, gradient_tracking):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'conformer_tunning'
+    project = 'gradient_tracking'
     exp_name = config['exp_name'] + '_' + dataset
+    # REPRODUCIBILITY
+    if 'seed' in config.keys(): 
+        set_seeds(config['seed'])
+        exp_name =  exp_name + '_' + config['seed']
+    else: 
+        set_seeds() # default seed = 42
 
     for run in config['runs']:
 
@@ -51,8 +67,8 @@ def main(config, wandb_upload, dataset, key, tunning):
         val_hop = ds_config['hop'] if not unit_output else 1
 
         # Saving paths
-        mdl_save_path = global_path + '/results/'+key+'/models'
-        metrics_save_path = global_path + '/results/'+key+'/metrics'
+        mdl_save_path = os.path.join(global_path, 'results', exp_name, key, 'models')
+        metrics_save_path = os.path.join(global_path, 'results', exp_name, key, 'metrics')
 
         # # Population mode that generates a model for all samples
         if key == 'population':
@@ -97,9 +113,10 @@ def main(config, wandb_upload, dataset, key, tunning):
             print(f'Model size: {mdl_size / 1e06:.2f}M')
             # WEIGHT INITILAIZATION
             if exp_name == 'bool_params':
-                if run['init_weights']: mdl.apply(mdl.init_weights)
+                if train_params['init_weights']: mdl.apply(mdl.init_weights)
     
             if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
+            if gradient_tracking and wandb_upload: wandb.watch(models=mdl, log='all')
 
             # LOAD THE DATA
             train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, filt=filt, filt_path=filt_path, 
@@ -187,7 +204,12 @@ def main(config, wandb_upload, dataset, key, tunning):
                 
                 if wandb_upload:
                     wandb.log({'train_loss': -mean_train_loss, 'val_loss': -mean_val_loss, 'val_acc': val_decAccuracy})
-                
+                    # if gradient_tracking:
+                    #     for name, param in mdl.named_parameters():
+                    #         if param.grad is not None and name in desired_layers:
+                    #             # detach that eliminates property of the tensor of requiring grad
+                    #             wandb.log({f"{name}_grad": wandb.Histogram(param.cpu().detach().numpy()), "epoch": epoch}) 
+
                 train_mean_loss.append(mean_train_loss)
                 val_mean_loss.append(mean_val_loss)
                 val_decAccuracies.append(val_decAccuracy)
@@ -240,9 +262,10 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/replicate_results/config.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
+    parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
@@ -259,4 +282,4 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, args.key, args.tunning)
+    main(config, wandb_upload, args.dataset, args.key, args.tunning, args.gradient_tracking)

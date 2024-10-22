@@ -17,8 +17,9 @@ runs:
       weight_decay: 1e-04                     
       early_stopping_patience: 5
       scheduler_patience: 2
+      init_weights: False
     dataset_params:
-      window_len: 20 
+      window_len: 320 
       hop: 1          
       filt: False       
       fixed: False      
@@ -32,11 +33,39 @@ runs:
       kernel_temp: 8
       pool: 10
       pool_hop: 4
-      block_size: 20
+      block_size: 320
       dropout: 0.4
       classifier: True
       bias: True
+
+  - model: 'Conformer' # filt
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                     
+      early_stopping_patience: 5
+      scheduler_patience: 2
       init_weights: False
+    dataset_params:
+      window_len: 320 
+      hop: 1          
+      filt: True       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      mlp_ratio: 2
+      enc_layers: 4
+      n_head: 4
+      n_embd: 40
+      kernel_temp: 8
+      pool: 10
+      pool_hop: 4
+      block_size: 320
+      dropout: 0.4
+      classifier: True
+      bias: False
 
   - model: 'Conformer' # bias
     train_params:
@@ -46,8 +75,9 @@ runs:
       weight_decay: 1e-04                     
       early_stopping_patience: 5
       scheduler_patience: 2
+      init_weights: False
     dataset_params:
-      window_len: 20 
+      window_len: 320 
       hop: 1          
       filt: False       
       fixed: False      
@@ -61,11 +91,10 @@ runs:
       kernel_temp: 8
       pool: 10
       pool_hop: 4
-      block_size: 20
+      block_size: 320
       dropout: 0.4
       classifier: True
       bias: False
-      init_weights: False
 
   - model: 'Conformer' # classifier
     train_params:
@@ -75,8 +104,9 @@ runs:
       weight_decay: 1e-04                     
       early_stopping_patience: 5
       scheduler_patience: 2
+      init_weights: False
     dataset_params:
-      window_len: 20 
+      window_len: 320 
       hop: 1          
       filt: False       
       fixed: False      
@@ -90,11 +120,10 @@ runs:
       kernel_temp: 8
       pool: 10
       pool_hop: 4
-      block_size: 20
+      block_size: 320
       dropout: 0.4
       classifier: False
       bias: False
-      init_weights: False
 
   - model: 'Conformer' # init weights
     train_params:
@@ -104,8 +133,9 @@ runs:
       weight_decay: 1e-04                     
       early_stopping_patience: 5
       scheduler_patience: 2
+      init_weights: True
     dataset_params:
-      window_len: 20 
+      window_len: 320 
       hop: 1          
       filt: False       
       fixed: False      
@@ -119,8 +149,7 @@ runs:
       kernel_temp: 8
       pool: 10
       pool_hop: 4
-      block_size: 20
+      block_size: 320
       dropout: 0.4
       classifier: True
       bias: False
-      init_weights: True
