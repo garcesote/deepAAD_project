@@ -47,25 +47,23 @@ def run_experiment(dataset, key, train=True, eval=True, train_ridge=True, eval_r
 # run_experiment('jaulab', 'subj_specific')
 # run_experiment('skl', 'population')
 
-# bool_sim
+# upsample_sim
 cmd = [
         "py", "train_models.py", 
-        "--config", "configs/conformer_tunning/bool_params.yaml",
+        "--config", "configs/gradien_tracking/model_upsampling.yaml",
         "--wandb",
-        "--tunning",
         "--key", 'population',
         "--dataset", 'fulsang'
     ]  
 print(cmd)
 subprocess.run(cmd)
 
-# grad_sim
+# max_epoch_sim
 cmd = [
         "py", "train_models.py", 
-        "--config", "configs/replicate_results/train_conformer.yaml",
+        "--config", "configs/gradient_tracking/models_tracking.yaml",
         "--wandb",
-        "--tunning",
-        "--gradient_tracking",
+        "--max_epoch"
         "--key", 'population',
         "--dataset", 'fulsang'
     ]  

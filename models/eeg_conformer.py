@@ -35,10 +35,6 @@ class PatchEmbedding(nn.Module):
         )
 
         self.projection = nn.Conv2d(config.n_embd, config.n_embd, (1, 1), stride=(1, 1))  # transpose, conv could enhance fiting ability slightly
-        # self.projection = nn.Sequential(
-        #     nn.Conv2d(config.n_embd, config.n_embd, (1, 1), stride=(1, 1)),  # transpose, conv could enhance fitting ability slightly
-        #     # Rearrange('b e (h) (w) -> b (h w) e'),
-        # )
 
 
     def forward(self, x: Tensor) -> Tensor:
@@ -120,7 +116,7 @@ class TemporalSelfAttention(nn.Module):
     
 class MLP(nn.Module):
 
-    """Multi layer perceptron
+    """ Multi layer perceptron
     
     Parameters: 
     ------------
@@ -148,7 +144,7 @@ class MLP(nn.Module):
     
 class EncoderBlock(nn.Module):
 
-    """Transformer encoder Block
+    """ Transformer encoder Block
 
     Parameters
     -----------
@@ -177,18 +173,12 @@ class ClassificationHead(nn.Sequential):
     # def __init__(self, emb_size, n_classes):
     def __init__(self, config):
         super().__init__()
-        
-        # global average pooling
-        # self.clshead = nn.Sequential(
-        #     Reduce('b n e -> b e', reduction='mean'),
-        #     nn.LayerNorm(emb_size),
-        #     nn.Linear(emb_size, n_classes)
-        # )
 
         self.dim_tempConv = config.block_size - config.kernel_temp + 1
         self.dim_chanConv = config.eeg_channels - config.kernel_chan + 1
         self.dim_pool = (self.dim_tempConv - config.pool) // config.pool_hop + 1
         self.input_size = self.dim_pool * self.dim_chanConv * config.n_embd
+        self.output_dim = 1 if config.unit_output else config.block_size
 
         if config.classifier:
             self.fc = nn.Sequential(
@@ -198,7 +188,7 @@ class ClassificationHead(nn.Sequential):
                 nn.Linear(256, 32),
                 nn.ELU(),
                 nn.Dropout(config.dropout),
-                nn.Linear(32, 1)
+                nn.Linear(32, self.output_dim)
             )
         else:
             self.fc = nn.Linear(self.input_size, 1)
@@ -227,11 +217,12 @@ class ConformerConfig:
     block_size: int = 128 # 2s
     dropout: float = 0.4
     classifier: bool = True
+    unit_output: bool = True
     bias: bool = True # True: bias in Linears and LayerNorms. False: a bit better and faster 
 
 class Conformer(nn.Sequential):
 
-    """EEG Conformer architecture for AAD
+    """ EEG Conformer architecture for AAD
     
     This architecture decode the channel and temp dependencies performing a Path Embedding
     to better represent the data and apply a temporal-self-attention transformer
@@ -294,7 +285,7 @@ class Conformer(nn.Sequential):
         preds = torch.squeeze(preds)
 
         if targets is not None:
-            loss = - correlation(preds, targets, batch_dim=True)
+            loss = - correlation(preds, targets, batch_dim=self.config.unit_output)
         else:
             loss = None
         return preds, loss

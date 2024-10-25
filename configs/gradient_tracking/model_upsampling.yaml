@@ -39,7 +39,7 @@ runs: # All models trained with window size of 5s
     dataset_params:
       upsample: True
       window_len: 256  
-      hop: 4          
+      hop: 4         
       filt: False       
       fixed: False      
       rnd_trials: False   

@@ -9,12 +9,14 @@ from utils.functional import correlation
 
 class FCNN(nn.Module):
 
-    def __init__(self, n_hidden, dropout=0.45, n_chan=63, n_samples=50):
+    def __init__(self, n_hidden, dropout=0.45, n_chan=63, n_samples=50, unit_output=True):
         
         super().__init__()
         self.input_dim = n_chan * n_samples
         self.n_chan = n_chan
         self.n_samples = n_samples
+        self.unit_output = unit_output
+        self.output_dim = 1 if unit_output else n_samples
         layers = []
 
         # First flatten layer (B, T x C)
@@ -28,7 +30,7 @@ class FCNN(nn.Module):
                 layers.append(nn.Dropout(p = dropout))
 
         # Output layer
-        layers.append(nn.Linear(int(self.input_dim / (n_hidden+1)), 1))
+        layers.append(nn.Linear(int(self.input_dim / (n_hidden+1)), self.output_dim))
         
         self.model =  nn.Sequential(*layers) # * para introducir los elementos de la lista por separado (si no esta un elemento con la lista)
 
@@ -39,7 +41,7 @@ class FCNN(nn.Module):
             if targets is None:
                 loss = None
             else:
-                loss = - correlation(preds, targets)
+                loss = - correlation(preds, targets, self.unit_output)
             return preds, loss
         else:
             raise ValueError("Se debe introducir un tensor con las dimensiones adecuadas (B, C, T)")
@@ -47,7 +49,7 @@ class FCNN(nn.Module):
 
 class CNN(nn.Module):
 
-    def __init__(self, F1=8, D=8, F2=64, AP1 = 2, AP2 = 4, dropout = 0.2, input_channels=64, input_samples=50):
+    def __init__(self, F1=8, D=8, F2=64, AP1 = 2, AP2 = 4, dropout = 0.2, input_channels=64, input_samples=50, unit_output=True):
 
         super().__init__()
         self.F1 = F1
@@ -55,6 +57,8 @@ class CNN(nn.Module):
         self.D = D
         self.input_channels = input_channels
         self.input_samples = input_samples
+        self.unit_output = unit_output
+        self.output_dim = 1 if unit_output else input_samples
 
         # input with shape (B, 1, T, C) => outputs (B, F1, T, C)
         self.temporal = nn.Sequential(
@@ -81,15 +85,15 @@ class CNN(nn.Module):
         
         self.classifier = nn.Sequential(
             nn.Flatten(start_dim = 1, end_dim = -1), # concat feature and sample dimension
-            nn.Linear(F2 * (input_samples // (AP1 * AP2)), 1, bias=True) # apply linear layer to obtain the unit output
+            nn.Linear(F2 * (input_samples // (AP1 * AP2)), self.output_dim, bias=True) # apply linear layer to obtain the unit output
         )
     
     def forward(self, input, targets = None):
         # input shape must be (batch, n_chan, n_samples)
         if list(input.shape) == [input.shape[0], self.input_channels, self.input_samples]:
 
-            # add feature dimension and 
-            input = input.transpose(1, 2)
+            # add feature dimension and transpose 
+            input = input.transpose(1, 2) # (B, C, T) => (B, T, C)
             x = input.unsqueeze(1) 
 
             x = self.temporal(x)
@@ -101,7 +105,7 @@ class CNN(nn.Module):
             if targets is None:
                 loss = None
             else:
-                loss = -correlation(targets, preds)
+                loss = -correlation(targets, preds, batch_dim=self.unit_output)
             return preds, loss
         else:
             raise ValueError('El input de la red tiene que guardar dimensiones (B, C, T)')

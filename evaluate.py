@@ -1,5 +1,5 @@
 import torch
-from utils.functional import get_data_path, get_channels, get_subjects, get_filename, correlation
+from utils.functional import set_seeds, get_data_path, get_channels, get_subjects, get_filename, correlation
 from utils.datasets import CustomDataset
 from torch.utils.data import DataLoader
 from models.dnn import FCNN, CNN
@@ -20,6 +20,12 @@ def main(config, wandb_upload, dataset, key):
     project = 'gradient_trcking'
     window_list = [64, 128, 320, 640, 1600]
     exp_name = config['exp_name'] + '_' + dataset
+    # REPRODUCIBILITY
+    if 'seed' in config.keys(): 
+        set_seeds(config['seed'])
+        exp_name =  exp_name + '_' + config['seed']
+    else: 
+        set_seeds() # default seed = 42
     
     for run in config['runs']:
 
@@ -38,7 +44,8 @@ def main(config, wandb_upload, dataset, key):
             train_params = run['train_params']
             
             unit_output = ds_config['unit_output']
-            data_path = get_data_path(global_data_path, dataset, filt=False)
+            ds_upsample = True if 'upsample' in ds_config.keys() else False
+            data_path = get_data_path(global_data_path, dataset, filt=False, upsample = ds_upsample)
             window_len = ds_config['window_len'] if unit_output else eval_window
             hop = ds_config['hop'] if not unit_output else 1
             leave_one_out = True if key == 'subj_independent' else False

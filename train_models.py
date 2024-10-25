@@ -13,22 +13,13 @@ import os
 import json
 import wandb
 
-desired_layers = ['classif.fc.0.weight', 
-                  'classif.fc.6.weight', 
-                  'embed.shallownet.0.weight',
-                  'embed.shallownet.2.weight',
-                  'encoder.0.attn.w_q.weight',
-                  'encoder.3.attn.w_q.weight',
-                  'encoder.0.mlp.c_fc.weight',
-                  'encoder.3.mlp.c_fc.weight',
-                ]
-
-def main(config, wandb_upload, dataset, key, tunning, gradient_tracking):
+def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_stop):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
     project = 'gradient_tracking'
     exp_name = config['exp_name'] + '_' + dataset
+
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
         set_seeds(config['seed'])
@@ -48,8 +39,8 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking):
         max_epoch = train_params['max_epoch']
         lr = float(train_params['lr'])
         weight_decay = float(train_params['weight_decay'])
-        scheduler_patience = train_params['scheduler_patience']
-        early_stopping_patience = train_params['early_stopping_patience']
+        scheduler_patience = train_params['scheduler_patience'] if early_stop else 10
+        early_stopping_patience = train_params['early_stopping_patience'] if early_stop else max_epoch
 
         # Config dataset
         ds_config = run['dataset_params']
@@ -93,9 +84,11 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking):
             # LOAD THE MODEL
             if model == 'FCNN':
                 run['model_params']['n_chan'] = get_channels(dataset)
+                run['model_params']['unit_output'] = unit_output
                 mdl = FCNN(**run['model_params'])
             elif model == 'CNN':
                 run['model_params']['input_channels'] = get_channels(dataset)
+                run['model_params']['unit_output'] = unit_output
                 mdl = CNN(**run['model_params'])
             elif model == 'VLAAI':
                 run['model_params']['input_channels'] = get_channels(dataset)
@@ -103,6 +96,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking):
             elif model == 'Conformer':
                 run['model_params']['eeg_channels'] = get_channels(dataset)
                 run['model_params']['kernel_chan'] = get_channels(dataset)
+                run['model_params']['unit_output'] = unit_output
                 mdl_config = ConformerConfig(**run['model_params'])
                 mdl = Conformer(mdl_config)
             else:
@@ -205,12 +199,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking):
                 
                 if wandb_upload:
                     wandb.log({'train_loss': -mean_train_loss, 'val_loss': -mean_val_loss, 'val_acc': val_decAccuracy})
-                    # if gradient_tracking:
-                    #     for name, param in mdl.named_parameters():
-                    #         if param.grad is not None and name in desired_layers:
-                    #             # detach that eliminates property of the tensor of requiring grad
-                    #             wandb.log({f"{name}_grad": wandb.Histogram(param.cpu().detach().numpy()), "epoch": epoch}) 
-
+            
                 train_mean_loss.append(mean_train_loss)
                 val_mean_loss.append(mean_val_loss)
                 val_decAccuracies.append(val_decAccuracy)
@@ -263,10 +252,11 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/gradient_tracking/model_upsampling.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/gradient_tracking/window_output.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
+    parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
@@ -283,4 +273,4 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, args.key, args.tunning, args.gradient_tracking)
+    main(config, wandb_upload, args.dataset, args.key, args.tunning, args.gradient_tracking, not args.max_epoch)

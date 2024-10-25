@@ -3,7 +3,7 @@ global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
 # global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
 # global_data_path: 'D:\igarcia\AAD_Data'
 
-exp_name: 'max_epoch'
+exp_name: 'window_output'
 
 runs: # All models trained with window size of 5s
 
@@ -21,7 +21,7 @@ runs: # All models trained with window size of 5s
       filt: False       
       fixed: False      
       rnd_trials: False   
-      unit_output: True
+      unit_output: False
     model_params:
       n_hidden: 3
       dropout: 0.45
@@ -41,7 +41,7 @@ runs: # All models trained with window size of 5s
       filt: False       
       fixed: False      
       rnd_trials: False   
-      unit_output: True
+      unit_output: False
     model_params:
       F1: 8
       D: 8
@@ -65,7 +65,7 @@ runs: # All models trained with window size of 5s
       filt: False       
       fixed: False      
       rnd_trials: False   
-      unit_output: True
+      unit_output: False
     model_params:
       mlp_ratio: 2
       enc_layers: 2
