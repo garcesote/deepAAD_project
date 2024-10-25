@@ -50,7 +50,7 @@ def run_experiment(dataset, key, train=True, eval=True, train_ridge=True, eval_r
 # upsample_sim
 cmd = [
         "py", "train_models.py", 
-        "--config", "configs/gradien_tracking/model_upsampling.yaml",
+        "--config", "configs/gradient_tracking/model_upsampling.yaml",
         "--wandb",
         "--key", 'population',
         "--dataset", 'fulsang'
@@ -58,14 +58,25 @@ cmd = [
 print(cmd)
 subprocess.run(cmd)
 
-# max_epoch_sim
-cmd = [
-        "py", "train_models.py", 
-        "--config", "configs/gradient_tracking/models_tracking.yaml",
-        "--wandb",
-        "--max_epoch"
-        "--key", 'population',
-        "--dataset", 'fulsang'
-    ]  
-print(cmd)
-subprocess.run(cmd)
+# # max_epoch_sim
+# cmd = [
+#         "py", "train_models.py", 
+#         "--config", "configs/gradient_tracking/models_tracking.yaml",
+#         "--wandb",
+#         "--max_epoch"
+#         "--key", 'population',
+#         "--dataset", 'fulsang'
+#     ]  
+# print(cmd)
+# subprocess.run(cmd)
+
+# # window_output
+# cmd = [
+#         "py", "train_models.py", 
+#         "--config", "configs/gradient_tracking/window_output.yaml",
+#         "--wandb",
+#         "--key", 'population',
+#         "--dataset", 'fulsang'
+#     ]  
+# print(cmd)
+# subprocess.run(cmd)

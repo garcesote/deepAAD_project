@@ -1,7 +1,7 @@
-global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
-global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
-# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
-# global_data_path: 'D:\igarcia\AAD_Data'
+# global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+# global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
+global_data_path: 'D:\igarcia\AAD_Data'
 
 exp_name: 'window_output'
 
@@ -9,15 +9,15 @@ runs: # All models trained with window size of 5s
 
   - model: 'FCNN'
     train_params:
-      batch_size: 128              
+      batch_size: 64              
       max_epoch: 200              
       lr: 1e-06
       weight_decay: 1e-04                      
       early_stopping_patience: 5
       scheduler_patience: 2
     dataset_params:
-      window_len: 128  
-      hop: 1          
+      window_len: 320  
+      hop: 8          
       filt: False       
       fixed: False      
       rnd_trials: False   
@@ -25,19 +25,19 @@ runs: # All models trained with window size of 5s
     model_params:
       n_hidden: 3
       dropout: 0.45
-      n_samples: 128
+      n_samples: 320
 
   - model: 'CNN'
     train_params:
-      batch_size: 128              
+      batch_size: 64              
       max_epoch: 200              
       lr: 2e-05
       weight_decay: 1e-08                      
       early_stopping_patience: 5
       scheduler_patience: 2
     dataset_params:
-      window_len: 128  
-      hop: 1          
+      window_len: 320  
+      hop: 8          
       filt: False       
       fixed: False      
       rnd_trials: False   
@@ -49,19 +49,19 @@ runs: # All models trained with window size of 5s
       AP1: 2
       AP2: 4
       dropout: 0.2
-      input_samples: 128
+      input_samples: 320
   
   - model: 'Conformer'
     train_params:
-      batch_size: 128              
+      batch_size: 64              
       max_epoch: 200              
       lr: 1e-06
       weight_decay: 1e-04                      
       early_stopping_patience: 5
       scheduler_patience: 2
     dataset_params:
-      window_len: 128  
-      hop: 1          
+      window_len: 320  
+      hop: 8          
       filt: False       
       fixed: False      
       rnd_trials: False   
@@ -74,7 +74,7 @@ runs: # All models trained with window size of 5s
       kernel_temp: 8
       pool: 10
       pool_hop: 4
-      block_size: 128 # 2s
+      block_size: 320 # 5s
       dropout: 0.4
       classifier: True
       bias: True
