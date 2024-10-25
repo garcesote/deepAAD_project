@@ -1,0 +1,166 @@
+global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
+# global_data_path: 'D:\igarcia\AAD_Data'
+
+exp_name: 'conformer_upsampling'
+
+runs: # All models trained with window size of 5s
+
+  - model: 'FCNN'
+    train_params:
+      batch_size: 512              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+    dataset_params:
+      upsample: True
+      window_len: 256  
+      hop: 4          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      n_hidden: 3
+      dropout: 0.45
+      n_samples: 256
+
+  - model: 'CNN'
+    train_params:
+      batch_size: 512              
+      max_epoch: 200              
+      lr: 2e-05
+      weight_decay: 1e-08                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+    dataset_params:
+      upsample: True
+      window_len: 256  
+      hop: 4          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      F1: 8
+      D: 8
+      F2: 64
+      AP1: 2
+      AP2: 4
+      dropout: 0.2
+      input_samples: 256
+  
+  - model: 'Conformer'
+    train_params:
+      batch_size: 512              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+    dataset_params:
+      upsample: True
+      window_len: 256  
+      hop: 4          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      mlp_ratio: 2
+      enc_layers: 2
+      n_head: 4
+      n_embd: 40
+      kernel_temp: 8
+      pool: 10
+      pool_hop: 4
+      block_size: 256
+      dropout: 0.4
+      classifier: True
+      bias: True
+
+  - model: 'Conformer'
+    train_params:
+      batch_size: 512              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+    dataset_params:
+      upsample: True
+      window_len: 256  
+      hop: 4         
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      mlp_ratio: 2
+      enc_layers: 2
+      n_head: 4
+      n_embd: 40
+      kernel_temp: 8
+      pool: 10
+      pool_hop: 4
+      block_size: 256
+      dropout: 0.4
+      classifier: False
+      bias: True
+
+  - model: 'Conformer'
+    train_params:
+      batch_size: 512              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+    dataset_params:
+      upsample: True
+      window_len: 1024  
+      hop: 4          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      mlp_ratio: 2
+      enc_layers: 2
+      n_head: 4
+      n_embd: 40
+      kernel_temp: 8
+      pool: 10
+      pool_hop: 4
+      block_size: 1024 # 2s
+      dropout: 0.4
+      classifier: False
+      bias: True
+
+  - model: 'CNN'
+    train_params:
+      batch_size: 512              
+      max_epoch: 200              
+      lr: 2e-05
+      weight_decay: 1e-08                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+    dataset_params:
+      upsampled: True
+      window_len: 1024  
+      hop: 4          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      unit_output: True
+    model_params:
+      F1: 8
+      D: 8
+      F2: 64
+      AP1: 2
+      AP2: 4
+      dropout: 0.2
+      input_samples: 1024

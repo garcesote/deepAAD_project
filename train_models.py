@@ -53,7 +53,8 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking):
 
         # Config dataset
         ds_config = run['dataset_params']
-        data_path = get_data_path(global_data_path, dataset, filt=False)
+        ds_upsample = True if 'upsample' in ds_config.keys() else False
+        data_path = get_data_path(global_data_path, dataset, filt=False, upsample = ds_upsample)
         window_len = ds_config['window_len']
         hop = ds_config['hop']
         leave_one_out = True if key == 'subj_independent' else False
@@ -62,7 +63,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking):
         fixed = ds_config['fixed']
         rnd_trials = ds_config['rnd_trials']
         unit_output = ds_config['unit_output']
-        val_bs = batch_size if unit_output else 1 # batch size equals 1 for estamiting a window when single output
+        val_bs = batch_size if unit_output else 1 # batch size equals 1 when estamiting a window instead of a single output
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
         val_hop = ds_config['hop'] if not unit_output else 1
 
@@ -262,7 +263,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/gradient_tracking/model_upsampling.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")

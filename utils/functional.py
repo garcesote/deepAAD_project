@@ -53,8 +53,10 @@ def get_trials(split: str, n_trials: int, shuffle: bool = False, fixed:bool = Fa
         return np.array([trials[idx] for idx in indices[sizes[0]:n_trials-sizes[1]]])
     elif split == 'test':
         return np.array([trials[idx] for idx in indices[n_trials-sizes[1]:n_trials]])
+    elif split == 'all':
+        return np.array([trials[idx] for idx in indices])
     else:
-        raise ValueError('Field split must be a train/val/test value')
+        raise ValueError('Field split must be a train/val/test/all value')
         
 # Return the required trials for splitting correctly the dataset introducing the set when population
 def get_leave_one_out_trials(split: str, n_trials: int, alternate: bool = False, fixed:bool = False):
@@ -158,10 +160,11 @@ def get_filename(mdl_folder_path, subject):
     return filename
 
 # Return datapath
-def get_data_path(global_data_path:str, dataset:str, filt:bool):
+def get_data_path(global_data_path:str, dataset:str, filt:bool, upsample:bool = False):
     
     paths = {'hugo_path': "/Hugo_2022/hugo_preproc_data",
             'fulsang_path': '/Fulsang_2017/DATA_preproc',
+            'fulsang_upsample_path': '/Fulsang_2017/DATA_preproc_256Hz',
             'jaulab_path': '/Jaulab_2024/PreprocData_ICA',
             'fulsang_filt_path': '/Fulsang_2017/DATA_filtered',
             'jaulab_filt_path': '/Jaulab_2024/DATA_filtered',
@@ -172,6 +175,8 @@ def get_data_path(global_data_path:str, dataset:str, filt:bool):
 
     if filt:
         return global_data_path + paths[dataset+'_filt_path']
+    elif upsample:
+        return global_data_path + paths[dataset+'_upsample_path']
     else:
         return global_data_path + paths[dataset+'_path']
 

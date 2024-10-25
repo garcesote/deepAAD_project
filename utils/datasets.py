@@ -118,7 +118,7 @@ class CustomDataset(Dataset):
         stima = []
         stimb = []
 
-        n_trials = 50 # 50 trials of 50s per subject in Fulsang dataset
+        n_trials = 60 # 50 trials of 50s per subject in Fulsang dataset
         if not self.leave_one_out:
             trials = get_trials(self.split, n_trials, shuffle=self.rnd_trials, fixed=False, dataset= self.dataset)
         else:
@@ -133,6 +133,8 @@ class CustomDataset(Dataset):
             # Array con n trials y dentro las muestras de audio y eeg
             stima_data = preproc_data['data']['wavA'][0,0][0,trials]
             stimb_data = preproc_data['data']['wavB'][0,0][0,trials]
+            self.chan_idx = preproc_data['data']['dim'][0,0][0,0]['chan']['eeg'][0,0][0,0]
+            self.chan_idx = np.array([chan[0] for chan in self.chan_idx[0]])
             n_trial = len(trials)
 
             if self.filt:
@@ -143,6 +145,7 @@ class CustomDataset(Dataset):
             # si hay mas canales de la cuenta selecciono los 64 primeros
             if eeg_data[0].shape[1] > 64:
                 eeg_data = [trial[:,:64] for trial in eeg_data]
+                self.chan_idx = self.chan_idx[:64]
         
             # Concatenar en un tensor todas os trials del sujeto (muestras * trials, canales) => (T * N, C).T => (C, T * N)
             eeg.append(torch.hstack([normalize_eeg(torch.tensor(eeg_data[trial]).T) for trial in range(n_trial)]))
@@ -235,6 +238,9 @@ class CustomDataset(Dataset):
             # Array con n trials y dentro las muestras de audio y eeg
             stima_data = preproc_data['data']['wavA'][0,0][0,trials]
             stimb_data = preproc_data['data']['wavB'][0,0][0,trials]
+            # channel info doesn't appear on the data.mat matrix
+            # self.chan_idx = preproc_data['data']['dim'][0,0][0,0]['chan']['eeg'][0,0][0,0]
+            # self.chan_idx = np.array([chan[0] for chan in self.chan_idx[0]])
             n_trial = len(trials)
 
             if self.filt:
