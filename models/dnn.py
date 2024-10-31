@@ -37,11 +37,13 @@ class FCNN(nn.Module):
     def forward(self, input, targets=None):
         # input shape must be (batch, n_chan, n_samples)
         if list(input.shape) == [input.shape[0], self.n_chan, self.n_samples]:
-            preds = torch.squeeze(self.model(input)) # generates an output with shape (batch, 1) => for each batch generates a single envelope prediction
+            preds = self.model(input)
+            if preds.shape[-1] == 1: # when generating unit_output
+                preds = torch.squeeze(self.model(input)) # generates an output with shape (batch, 1) => for each batch generates a single envelope prediction
             if targets is None:
                 loss = None
             else:
-                loss = - correlation(preds, targets, self.unit_output)
+                loss = - correlation(preds, targets, batch_dim = self.unit_output)
             return preds, loss
         else:
             raise ValueError("Se debe introducir un tensor con las dimensiones adecuadas (B, C, T)")
@@ -100,7 +102,9 @@ class CNN(nn.Module):
             x = self.spatial(x)
             x = self.depthwise(x)
             x = self.classifier(x)
-            preds = torch.squeeze(x)
+
+            if x.shape[-1] == 1: # when generating a unit output
+                preds = torch.squeeze(x)
 
             if targets is None:
                 loss = None

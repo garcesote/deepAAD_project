@@ -281,8 +281,9 @@ class Conformer(nn.Sequential):
         # Classification module to extract the single estimation
         feat_vector, preds = self.classif(x) 
 
-        # Squeeze the output in order to calculate the loss
-        preds = torch.squeeze(preds)
+        # Squeeze the output in order to calculate the loss ehwn predicting unit output
+        if preds.shape[-1] == 1:
+            preds = torch.squeeze(preds)
 
         if targets is not None:
             loss = - correlation(preds, targets, batch_dim=self.config.unit_output)
