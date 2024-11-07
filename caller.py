@@ -47,36 +47,47 @@ def run_experiment(dataset, key, train=True, eval=True, train_ridge=True, eval_r
 # run_experiment('jaulab', 'subj_specific')
 # run_experiment('skl', 'population')
 
-# upsample_sim
 cmd = [
-        "py", "train_models.py", 
-        "--config", "configs/gradient_tracking/model_upsampling.yaml",
-        "--wandb",
-        "--key", 'population',
-        "--dataset", 'fulsang'
+        "py", "train_ridge.py", 
+        "--key", 'subj_specific',
+        "--dataset", 'fulsang',
+        "--preproc_mode", "thortonF",
+        "--data_type", "npy"
     ]  
 print(cmd)
 subprocess.run(cmd)
 
-# # max_epoch_sim
-# cmd = [
-#         "py", "train_models.py", 
-#         "--config", "configs/gradient_tracking/models_tracking.yaml",
-#         "--wandb",
-#         "--max_epoch"
-#         "--key", 'population',
-#         "--dataset", 'fulsang'
-#     ]  
-# print(cmd)
-# subprocess.run(cmd)
+cmd = [
+        "py", "train_ridge.py",
+        "--key", 'subj_specific',
+        "--dataset", 'fulsang',
+        "--preproc_mode", "thortonFN",
+        "--data_type", "npy"
+    ]  
+print(cmd)
+subprocess.run(cmd)
 
-# # window_output
-# cmd = [
-#         "py", "train_models.py", 
-#         "--config", "configs/gradient_tracking/window_output.yaml",
-#         "--wandb",
-#         "--key", 'population',
-#         "--dataset", 'fulsang'
-#     ]  
-# print(cmd)
-# subprocess.run(cmd)
+# eval_ridge
+cmd = [
+    "py", "eval_ridge.py", 
+    "--key", 'subj_specific',
+    "--dataset", 'fulsang',
+    "--preproc_mode", "thortonF",
+    "--data_type", "npy",
+    "--wandb"
+]  
+print(cmd)
+subprocess.run(cmd)
+
+# eval_ridge
+cmd = [
+    "py", "eval_ridge.py", 
+    "--key", 'subj_specific',
+    "--dataset", 'fulsang',
+    "--preproc_mode", "thortonFN",
+    "--data_type", "npy",
+    "--wandb"
+]  
+print(cmd)
+subprocess.run(cmd)
+

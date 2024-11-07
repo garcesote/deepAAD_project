@@ -11,10 +11,11 @@ import wandb
 def main(
         dataset: str,
         key: str,
-        filt: bool,
         fixed: bool,
         rnd_trials: bool,
-        wandb_upload: bool
+        wandb_upload: bool,
+        preproc_mode: str = None,
+        data_type: str = 'mat'
     ):
 
     # Data path parameters
@@ -24,11 +25,10 @@ def main(
     # global_data_path: 'D:\igarcia\AAD_Data'
     project = 'replicate_model_results'
     
-    data_path = get_data_path(global_data_path, dataset, filt=False)
-    data_filt_path = get_data_path(global_data_path, dataset, filt=True) if filt else None
+    data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
 
     window_list = [64, 128, 320, 640, 1600]
-    time_shift = 100
+    time_shift = 100 # Null distribution
     leave_one_out = True if key == 'subj_independent' else False # Attention! This parameter change the whole sim. (read doc)
     dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
     
@@ -38,8 +38,8 @@ def main(
     # SAVE THE MODEL
     model = 'Ridge'
     # Add extensions to the model name depending on the params
-    if filt:
-        model = model + '_filt'
+    if preproc_mode is not None:
+        model = model + '_' + preproc_mode
     if rnd_trials:
         model = model + '_rnd'
 
@@ -78,8 +78,8 @@ def main(
             mdl = pickle.load(open(os.path.join(mdl_load_path, mdl_filename), 'rb'))
 
             # LOAD THE DATA
-            test_set = CustomDataset(dataset, data_path, 'test', subj, window=block_size, hop=block_size, filt=filt, 
-                                    filt_path= data_filt_path, leave_one_out=leave_one_out, fixed=fixed, rnd_trials=rnd_trials)
+            test_set = CustomDataset(dataset, data_path, 'test', subj, window=block_size, hop=block_size, data_type=data_type,
+                                    leave_one_out=leave_one_out, fixed=fixed, rnd_trials=rnd_trials)
             test_eeg, test_stima, test_stimb = test_set.eeg, test_set.stima, test_set.stimb
             test_stim_nd = torch.roll(test_stima.clone().detach(), time_shift)
 
@@ -137,10 +137,11 @@ if __name__ == "__main__":
     # Definir los argumentos que quieres aceptar
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
-    parser.add_argument("--filt", type=str2bool, default='False', help="EEG filtered")
     parser.add_argument("--fixed", type=str2bool, default='False', help="Static Jaulab trials")
     parser.add_argument("--rnd_trials", type=str2bool, default='False', help="Random trial selection")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
+    parser.add_argument("--preproc_mode", type=str, default=None, help="Select preprocessing mode")
+    parser.add_argument("--data_type", type=str, default='mat', help="Data type between mat or npy")
 
     args = parser.parse_args()
 
@@ -154,8 +155,9 @@ if __name__ == "__main__":
     main(
         args.dataset,
         args.key,
-        args.filt,
         args.fixed,
         args.rnd_trials,
-        args.wandb
+        args.wandb,
+        args.preproc_mode,
+        args.data_type
     )

@@ -10,9 +10,10 @@ import argparse
 def main(
         dataset: str,
         key: str,
-        filt: bool,
         fixed: bool,
         rnd_trials: bool,
+        preproc_mode: str = None,
+        data_type: str = 'mat'
     ):
 
     # Saving path parameters
@@ -21,8 +22,7 @@ def main(
     # global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
     # global_data_path: 'D:\igarcia\AAD_Data'
     mdl_save_path = global_path + '/results/'+key+'/models'
-    data_path = get_data_path(global_data_path, dataset, filt=False)
-    data_filt_path = get_data_path(global_data_path, dataset, filt=True) if filt else None
+    data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
 
     """
 
@@ -52,7 +52,6 @@ def main(
 
     dataset = dataset
     leave_one_out = True if key == 'subj_independent' else False # Attention! This parameter change the whole sim. (read doc)
-    filt = filt
     fixed = fixed
     rnd_trials = rnd_trials
     trial_len = get_trials_len(dataset)
@@ -73,9 +72,9 @@ def main(
             print(f'Training Ridge on {subj} with {dataset} data...')
 
         # LOAD THE DATA
-        train_set = CustomDataset(dataset, data_path, 'train', subj, window=trial_len, hop=trial_len, filt=filt, filt_path=data_filt_path, 
+        train_set = CustomDataset(dataset, data_path, 'train', subj, window=trial_len, hop=trial_len, data_type=data_type, 
                                     leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials)
-        val_set = CustomDataset(dataset, data_path, 'val',  subj, window=trial_len, hop=trial_len, filt=filt, filt_path=data_filt_path, 
+        val_set = CustomDataset(dataset, data_path, 'val',  subj, window=trial_len, hop=trial_len, data_type=data_type, 
                                 leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials)
 
         alphas = np.logspace(-7,7, 15)
@@ -98,10 +97,11 @@ def main(
         # SAVE THE MODEL
         model_name = 'Ridge'
         # Add extensions to the model name depending on the params
-        if filt:
-            model_name = model_name + '_filt'
+        if preproc_mode is not None:
+            model_name = model_name + '_' + preproc_mode
         if rnd_trials:
             model_name = model_name + '_rnd'
+
         dataset_filename = dataset+'_fixed' if fixed and dataset == 'jaulab' else dataset
 
         mdl_prefix = key if key == 'population' else subj
@@ -120,17 +120,19 @@ if __name__ == "__main__":
     # Definir los argumentos que quieres aceptar
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
-    parser.add_argument("--filt", type=str2bool, default='False', help="EEG filtered")
     parser.add_argument("--fixed", type=str2bool, default='False', help="Static Jaulab trials")
     parser.add_argument("--rnd_trials", type=str2bool, default='False', help="Random trial selection")
-    
+    parser.add_argument("--preproc_mode", type=str, default=None, help="Random trial selection")
+    parser.add_argument("--data_type", type=str, default='mat', help="Random trial selection")
+
     args = parser.parse_args()
 
     # Llamar a la función de entrenamiento con los argumentos
     main(
         args.dataset,
         args.key,
-        args.filt,
         args.fixed,
-        args.rnd_trials
+        args.rnd_trials,
+        args.preproc_mode,
+        args.data_type
     )

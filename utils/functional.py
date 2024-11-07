@@ -160,25 +160,24 @@ def get_filename(mdl_folder_path, subject):
     return filename
 
 # Return datapath
-def get_data_path(global_data_path:str, dataset:str, filt:bool, upsample:bool = False):
+def get_data_path(global_data_path:str, dataset:str, preproc_mode=None):
     
     paths = {'hugo_path': "/Hugo_2022/hugo_preproc_data",
             'fulsang_path': '/Fulsang_2017/DATA_preproc',
             'fulsang_upsample_path': '/Fulsang_2017/DATA_preproc_256Hz',
+            'fulsang_thorton_path': '/Fulsang_2017/DATA_preproc_Thorton',
+            'fulsang_thortonF_path': '/Fulsang_2017/DATA_fulsPrep_thortF',
+            'fulsang_thortonFN_path': '/Fulsang_2017/DATA_fulsPrep_thortFN',
             'jaulab_path': '/Jaulab_2024/PreprocData_ICA',
             'fulsang_filt_path': '/Fulsang_2017/DATA_filtered',
             'jaulab_filt_path': '/Jaulab_2024/DATA_filtered',
             'jaulab_fix_path': '/Jaulab_2024/fixed_trials.npy',
             'skl_path': '/SKL_2023/split_data',
-            'skl_filt_path': None,
+            'skl_filt_path': None, 
     }
 
-    if filt:
-        return global_data_path + paths[dataset+'_filt_path']
-    elif upsample:
-        return global_data_path + paths[dataset+'_upsample_path']
-    else:
-        return global_data_path + paths[dataset+'_path']
+    folder_path = paths[dataset+'_'+preproc_mode+'_path'] if preproc_mode is not None else paths[dataset+'_path']
+    return global_data_path + folder_path
 
 def get_channels(dataset:str):
     channels = {
