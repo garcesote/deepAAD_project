@@ -15,7 +15,8 @@ def main(
         rnd_trials: bool,
         wandb_upload: bool,
         preproc_mode: str = None,
-        data_type: str = 'mat'
+        data_type: str = 'mat',
+        eeg_band: str = None
     ):
 
     # Data path parameters
@@ -23,7 +24,7 @@ def main(
     global_path = 'C:/Users/jaulab/Desktop/deepAAD_project'
     # global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
     # global_data_path: 'D:\igarcia\AAD_Data'
-    project = 'replicate_model_results'
+    project = 'gradient_tracking'
     
     data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
 
@@ -36,10 +37,12 @@ def main(
     dataset_name = dataset+'_fixed' if fixed and dataset == 'jaulab' else dataset
 
     # SAVE THE MODEL
-    model = 'Ridge'
+    model = 'Ridge_pre_stim_rev'
     # Add extensions to the model name depending on the params
     if preproc_mode is not None:
         model = model + '_' + preproc_mode
+    if eeg_band is not None:
+        model = model + '_' + eeg_band
     if rnd_trials:
         model = model + '_rnd'
 
@@ -79,7 +82,7 @@ def main(
 
             # LOAD THE DATA
             test_set = CustomDataset(dataset, data_path, 'test', subj, window=block_size, hop=block_size, data_type=data_type,
-                                    leave_one_out=leave_one_out, fixed=fixed, rnd_trials=rnd_trials)
+                                    leave_one_out=leave_one_out, fixed=fixed, rnd_trials=rnd_trials, eeg_band = eeg_band)
             test_eeg, test_stima, test_stimb = test_set.eeg, test_set.stima, test_set.stimb
             test_stim_nd = torch.roll(test_stima.clone().detach(), time_shift)
 
@@ -136,12 +139,13 @@ if __name__ == "__main__":
     
     # Definir los argumentos que quieres aceptar
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--fixed", type=str2bool, default='False', help="Static Jaulab trials")
     parser.add_argument("--rnd_trials", type=str2bool, default='False', help="Random trial selection")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--preproc_mode", type=str, default=None, help="Select preprocessing mode")
     parser.add_argument("--data_type", type=str, default='mat', help="Data type between mat or npy")
+    parser.add_argument("--eeg_band", type=str, default=None, help="Select the freq band (delta, theta, alpha, beta)")
 
     args = parser.parse_args()
 
@@ -159,5 +163,6 @@ if __name__ == "__main__":
         args.rnd_trials,
         args.wandb,
         args.preproc_mode,
-        args.data_type
+        args.data_type,
+        args.eeg_band
     )

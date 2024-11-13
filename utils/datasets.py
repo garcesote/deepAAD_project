@@ -65,7 +65,7 @@ class CustomDataset(Dataset):
 
     def __init__(self, dataset, data_path, split, subjects, window, hop, 
                  norm_stim=False, data_type = 'mat', leave_one_out = False,
-                 fixed=False, rnd_trials=False, unit_output=True):
+                 fixed=False, rnd_trials=False, unit_output=True, eeg_band= None):
 
         if not isinstance(subjects, list):
             subjects = [subjects]
@@ -91,6 +91,7 @@ class CustomDataset(Dataset):
         self.norm_stim = norm_stim
         self.leave_one_out = leave_one_out
         self.unit_ouput = unit_output
+        self.eeg_band = eeg_band
 
         if dataset == 'fulsang':
             self.eeg, self.stima, self.stimb = self.get_Fulsang_data()
@@ -148,7 +149,8 @@ class CustomDataset(Dataset):
                 stimb_data = torch.squeeze(torch.vstack([torch.tensor(stimb_data[trial]) for trial in range(self.n_trials)]))
 
             elif self.data_type == 'npy':
-                eeg_data = np.load(os.path.join(self.data_path, 'eeg', subject+'_eeg.npy'), allow_pickle=True)[trials]
+                folder_name = 'eeg' if self.eeg_band is None else 'eeg_band_' + self.eeg_band
+                eeg_data = np.load(os.path.join(self.data_path, folder_name, subject+'_eeg.npy'), allow_pickle=True)[trials]
                 stima_data = torch.tensor(np.load(os.path.join(self.data_path, 'stim', subject+'_stima.npy'), allow_pickle=True)[trials])
                 stimb_data = torch.tensor(np.load(os.path.join(self.data_path, 'stim', subject+'_stimb.npy'), allow_pickle=True)[trials])
                 self.chan_idx = None

@@ -47,47 +47,31 @@ def run_experiment(dataset, key, train=True, eval=True, train_ridge=True, eval_r
 # run_experiment('jaulab', 'subj_specific')
 # run_experiment('skl', 'population')
 
-cmd = [
-        "py", "train_ridge.py", 
+eeg_bands = ['delta', 'theta', 'alpha', 'beta']
+
+for band in eeg_bands:
+
+    # cmd = [
+    #     "py", "train_ridge.py", 
+    #     "--key", 'subj_specific',
+    #     "--dataset", 'fulsang',
+    #     "--preproc_mode", "bandAnalysis",
+    #     "--data_type", "npy",
+    #     "--eeg_band", band
+    # ]  
+    # print(cmd)
+    # subprocess.run(cmd)
+
+    # eval_ridge
+    cmd = [
+        "py", "eval_ridge.py", 
         "--key", 'subj_specific',
         "--dataset", 'fulsang',
-        "--preproc_mode", "thortonF",
-        "--data_type", "npy"
+        "--preproc_mode", "bandAnalysis",
+        "--data_type", "npy",
+        "--eeg_band", band,
+        "--wandb"
     ]  
-print(cmd)
-subprocess.run(cmd)
-
-cmd = [
-        "py", "train_ridge.py",
-        "--key", 'subj_specific',
-        "--dataset", 'fulsang',
-        "--preproc_mode", "thortonFN",
-        "--data_type", "npy"
-    ]  
-print(cmd)
-subprocess.run(cmd)
-
-# eval_ridge
-cmd = [
-    "py", "eval_ridge.py", 
-    "--key", 'subj_specific',
-    "--dataset", 'fulsang',
-    "--preproc_mode", "thortonF",
-    "--data_type", "npy",
-    "--wandb"
-]  
-print(cmd)
-subprocess.run(cmd)
-
-# eval_ridge
-cmd = [
-    "py", "eval_ridge.py", 
-    "--key", 'subj_specific',
-    "--dataset", 'fulsang',
-    "--preproc_mode", "thortonFN",
-    "--data_type", "npy",
-    "--wandb"
-]  
-print(cmd)
-subprocess.run(cmd)
+    print(cmd)
+    subprocess.run(cmd)
 

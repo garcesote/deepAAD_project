@@ -13,7 +13,8 @@ def main(
         fixed: bool,
         rnd_trials: bool,
         preproc_mode: str = None,
-        data_type: str = 'mat'
+        data_type: str = 'mat',
+        eeg_band: str = None
     ):
 
     # Saving path parameters
@@ -73,14 +74,14 @@ def main(
 
         # LOAD THE DATA
         train_set = CustomDataset(dataset, data_path, 'train', subj, window=trial_len, hop=trial_len, data_type=data_type, 
-                                    leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials)
+                                    leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, eeg_band=eeg_band)
         val_set = CustomDataset(dataset, data_path, 'val',  subj, window=trial_len, hop=trial_len, data_type=data_type, 
-                                leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials)
+                                leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, eeg_band=eeg_band)
 
         alphas = np.logspace(-7,7, 15)
         trial_len = get_trials_len(dataset) # in order to estumate correctly the lag matrix
 
-        mdl = Ridge(start_lag=0, end_lag=30, alpha=alphas, trial_len = trial_len, original=False)
+        mdl = Ridge(start_lag=-25, end_lag=0, alpha=alphas, trial_len = trial_len, original=False)
 
         train_eeg, train_stim = train_set.eeg, train_set.stima 
         val_eeg, val_stim = val_set.eeg, val_set.stima
@@ -95,10 +96,12 @@ def main(
         print(f'Ridge trained for {dataset} data with a score of {scores[best_alpha]} with alpha = {best_alpha}')
 
         # SAVE THE MODEL
-        model_name = 'Ridge'
+        model_name = 'Ridge_pre_stim_rev'
         # Add extensions to the model name depending on the params
         if preproc_mode is not None:
             model_name = model_name + '_' + preproc_mode
+        if eeg_band is not None:
+            model_name = model_name + '_' + eeg_band
         if rnd_trials:
             model_name = model_name + '_rnd'
 
@@ -119,11 +122,12 @@ if __name__ == "__main__":
     
     # Definir los argumentos que quieres aceptar
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--fixed", type=str2bool, default='False', help="Static Jaulab trials")
     parser.add_argument("--rnd_trials", type=str2bool, default='False', help="Random trial selection")
-    parser.add_argument("--preproc_mode", type=str, default=None, help="Random trial selection")
-    parser.add_argument("--data_type", type=str, default='mat', help="Random trial selection")
+    parser.add_argument("--preproc_mode", type=str, default=None, help="Select preprocessing mode")
+    parser.add_argument("--data_type", type=str, default='mat', help="Data type between mat or npy")
+    parser.add_argument("--eeg_band", type=str, default=None, help="Select the freq band (delta, theta, alpha, beta)")
 
     args = parser.parse_args()
 
@@ -134,5 +138,6 @@ if __name__ == "__main__":
         args.fixed,
         args.rnd_trials,
         args.preproc_mode,
-        args.data_type
+        args.data_type,
+        args.eeg_band
     )

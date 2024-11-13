@@ -49,15 +49,16 @@ class Ridge:
         
         n_trials = n_times // self.trial_len
         # 2. Form the circulant data matrix
-        lagged_matrix = np.empty((n_times, self.num_lags, self.n_input_features))
+        lagged_matrix = np.empty((self.num_lags*self.n_input_features, n_times))
 
         for n in tqdm(range(n_trials), desc="Computing lagged matrix"):
             start = n * self.trial_len
             end = start + self.trial_len
-            for ipf in range(self.n_input_features):
-                lagged_matrix[start:end, :, ipf] = self._get_lagged_matrix(X[start:end, ipf])
-            
-        lagged_matrix = np.reshape(lagged_matrix, (n_times, self.num_lags*self.n_input_features))
+            lagged_matrix[:, start:end] = self._get_lagged_matrix(X[start:end, :].T)
+            # for ipf in range(self.n_input_features):
+            #     lagged_matrix[start:end, :, ipf] = self._get_lagged_matrix(X[start:end, ipf])
+        lagged_matrix = np.transpose(lagged_matrix)
+        # lagged_matrix = np.reshape(lagged_matrix, (n_times, self.num_lags*self.n_input_features))
         if self.verbose:
             print('Computing autocorr_matrix...')
         XtX = np.dot(lagged_matrix.T, lagged_matrix)
@@ -111,14 +112,13 @@ class Ridge:
         '''
         
         # 1. Form the Toeplitz matrix
-        
         n_times = X.shape[0]
-        lagged_matrix = np.empty((n_times, self.num_lags, self.n_input_features))
-        
-        for ipf in range(self.n_input_features):
-            lagged_matrix[:, :, ipf] = self._get_lagged_matrix(X[:, ipf])
+        lagged_matrix = self._get_lagged_matrix(X.T)
+        lagged_matrix = np.transpose(lagged_matrix)
+        # for ipf in range(self.n_input_features):
+        #     lagged_matrix[:, :, ipf] = self._get_lagged_matrix(X[:, ipf])
             
-        lagged_matrix = np.reshape(lagged_matrix, (n_times, self.num_lags*self.n_input_features))
+        # lagged_matrix = np.reshape(lagged_matrix, (n_times, self.num_lags*self.n_input_features))
         
         # 2. Create predictions for every alpha and every output feature
                 
@@ -193,9 +193,6 @@ class Ridge:
             scores.append([pearsonr(p_batch[:, opc], y_batch[:, opc])[0] for opc in range(self.n_output_features)])
             
         return np.asarray(scores)
-
-
-
     
     def model_selection(self, X, y):
         '''
@@ -212,17 +209,27 @@ class Ridge:
         mean_scores = np.mean(scores, axis=1)
         self.best_alpha_idx = np.argmax(mean_scores)
         return mean_scores
-
-
-    def _get_lagged_matrix(self, X):
-
-        if self.start_lag<=0:
-            X_ = np.pad(X, (abs(self.start_lag), 0))
-            r = np.zeros(self.num_lags)
-            lagged_matrix = toeplitz(X_, r)
-            return lagged_matrix
         
-        if self.start_lag>0:
-            r = np.zeros((self.num_lags+self.start_lag))
-            lagged_matrix = toeplitz(X, r)[:, self.start_lag:]
-            return lagged_matrix
+    # New lagged function: Introduce a matrix of shape (C, T) and return a matrix (L*C, T)
+    def _get_lagged_matrix(self, X):
+        n_chan, n_times = X.shape
+        lagged_matrix = np.zeros((n_chan * self.num_lags, n_times))
+        if self.start_lag < 0:
+            range = np.arange(self.end_lag, self.start_lag, -1)
+        else:
+            range = np.arange(self.start_lag, self.end_lag)
+
+        for i, lag in enumerate(range):
+            
+            shifted_X = np.roll(X, shift=lag, axis=1)
+
+            # Rellenamos los elementos desplazados con ceros según el signo de lag
+            if lag > 0:
+                shifted_X[:, :lag] = 0  # Zerofill beginning if lag > 0
+            elif lag < 0:
+                shifted_X[:, lag:] = 0  # Zerofill end if lag < 0
+
+            # Insertamos el canal desplazado en su posición en la matriz lageada
+            lagged_matrix[i * n_chan:(i + 1) * n_chan, :] = shifted_X
+
+        return lagged_matrix

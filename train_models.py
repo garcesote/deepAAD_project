@@ -52,6 +52,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         hop = ds_config['hop']
         leave_one_out = True if key == 'subj_independent' else False
         data_type = ds_config['data_type'] if 'data_type' in ds_config.keys() else 'mat'
+        eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
         fixed = ds_config['fixed']
         rnd_trials = ds_config['rnd_trials']
         unit_output = ds_config['unit_output']
@@ -115,10 +116,10 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
             if gradient_tracking and wandb_upload: wandb.watch(models=mdl, log='all')
 
             # LOAD THE DATA
-            train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, data_type=data_type, 
-                                        leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output)
-            val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=val_hop, data_type=data_type,
-                                    leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output)
+            train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, data_type=data_type, leave_one_out=leave_one_out,  
+                                       fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output, eeg_band=eeg_band)
+            val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=val_hop, data_type=data_type, leave_one_out=leave_one_out, 
+                                    fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output, eeg_band = eeg_band)
             
             train_loader = DataLoader(train_set, batch_size, shuffle=True, pin_memory=True)
             val_loader = DataLoader(val_set, val_bs, shuffle= not unit_output, pin_memory=True)
@@ -222,6 +223,8 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                 # Add extensions to the model name depending on the params
                 if 'preproc_mode' in ds_config.keys():
                     mdl_name = mdl_name + '_' + preproc_mode
+                if eeg_band is not None:
+                    mdl_name = mdl_name + '_' + eeg_band
                 if rnd_trials:
                     mdl_name = mdl_name + '_rnd'
             
@@ -253,13 +256,13 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    # parser.add_argument("--config", type=str, default='configs/gradient_tracking/preproc_npy.yaml', help="Ruta al archivo config")
-    parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/gradient_tracking/band_analysis.yaml', help="Ruta al archivo config")
+    # parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
-    parser.add_argument("--dataset", type=str, default='jaulab', help="Dataset")
+    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
