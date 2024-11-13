@@ -55,10 +55,8 @@ class Ridge:
             start = n * self.trial_len
             end = start + self.trial_len
             lagged_matrix[:, start:end] = self._get_lagged_matrix(X[start:end, :].T)
-            # for ipf in range(self.n_input_features):
-            #     lagged_matrix[start:end, :, ipf] = self._get_lagged_matrix(X[start:end, ipf])
         lagged_matrix = np.transpose(lagged_matrix)
-        # lagged_matrix = np.reshape(lagged_matrix, (n_times, self.num_lags*self.n_input_features))
+
         if self.verbose:
             print('Computing autocorr_matrix...')
         XtX = np.dot(lagged_matrix.T, lagged_matrix)
@@ -115,10 +113,6 @@ class Ridge:
         n_times = X.shape[0]
         lagged_matrix = self._get_lagged_matrix(X.T)
         lagged_matrix = np.transpose(lagged_matrix)
-        # for ipf in range(self.n_input_features):
-        #     lagged_matrix[:, :, ipf] = self._get_lagged_matrix(X[:, ipf])
-            
-        # lagged_matrix = np.reshape(lagged_matrix, (n_times, self.num_lags*self.n_input_features))
         
         # 2. Create predictions for every alpha and every output feature
                 
