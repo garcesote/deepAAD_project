@@ -11,6 +11,7 @@ import wandb
 def main(
         dataset: str,
         key: str,
+        linear_model: str,
         fixed: bool,
         rnd_trials: bool,
         wandb_upload: bool,
@@ -37,7 +38,7 @@ def main(
     dataset_name = dataset+'_fixed' if fixed and dataset == 'jaulab' else dataset
 
     # SAVE THE MODEL
-    model = 'Ridge_pre_stim_rev'
+    model = linear_model
     # Add extensions to the model name depending on the params
     if preproc_mode is not None:
         model = model + '_' + preproc_mode
@@ -77,7 +78,7 @@ def main(
             else:
                 mdl_filename = get_filename(mdl_load_path, subj)
 
-            # CARGA EL MODELO
+            # LOAD THE MODEL
             mdl = pickle.load(open(os.path.join(mdl_load_path, mdl_filename), 'rb'))
 
             # LOAD THE DATA
@@ -86,28 +87,39 @@ def main(
             test_eeg, test_stima, test_stimb = test_set.eeg, test_set.stima, test_set.stimb
             test_stim_nd = torch.roll(test_stima.clone().detach(), time_shift)
 
-            # EVALÚA EN FUNCIÓN DEL MEJOR ALPHA/MODELO OBTENIDO
-            scores_a = mdl.score_in_batches(test_eeg.T, test_stima[:, np.newaxis], batch_size=block_size)
-            scores_nd = mdl.score_in_batches(test_eeg.T, test_stim_nd[:, np.newaxis], batch_size=block_size) # ya selecciona el best alpha solo
-            
-            # DECODING ACCURACY
-            att_corr = 0
-            if dec_acc:
-                scores_b = mdl.score_in_batches(test_eeg.T, test_stimb[:, np.newaxis], batch_size=block_size)
-                for i in range(len(scores_a)):
-                    score_a = scores_a[i]
-                    score_b = scores_b[i]
+            if linear_model == "Ridge":
 
-                    if score_a > score_b:
-                        att_corr += 1
+                # EVALUATE WITH THE BEST ALPHA OBTAINED
+                scores_a = mdl.score_in_batches(test_eeg.T, test_stima[:, np.newaxis], batch_size=block_size)
+                scores_nd = mdl.score_in_batches(test_eeg.T, test_stim_nd[:, np.newaxis], batch_size=block_size) # ya selecciona el best alpha solo
+
+                # DECODING ACCURACY
+                att_corr = 0
+                if dec_acc:
+                    scores_b = mdl.score_in_batches(test_eeg.T, test_stimb[:, np.newaxis], batch_size=block_size)
+                    for score_a, score_b in zip(scores_a, scores_b):
+                        if score_a > score_b:
+                            att_corr += 1
+
+                accuracy = (att_corr / len(scores_a)) * 100
+
+            elif linear_model == "CCA":
+                
+                # COMPUTE THE MEAN OF CANONICAL COMPONENTS SCORES
+                scores_a = np.mean(mdl.score_in_batches(test_eeg, test_stima, batch_size=block_size), axis=1)
+                scores_nd = np.mean(mdl.score_in_batches(test_eeg, test_stim_nd, batch_size=block_size), axis=1)
+
+                # GET THE ACCURACY USING THE LDA CLASSIFIER
+                if dec_acc:
+                    accuracy = mdl.classify_in_batches(test_eeg, test_stima, test_stimb, batch_size = block_size)
 
             eval_results[subj] = [score for score in np.squeeze(scores_a)]
             nd_results[subj] = [score for score in np.squeeze(scores_nd)]
-            dec_accuracy = (att_corr / len(scores_a)) * 100
-            dec_results.append(dec_accuracy)
+            
+            dec_results.append(accuracy)
             eval_mean_results.append(np.mean(scores_a))
 
-            print(f'Subject {subj} | corr_mean {np.mean(scores_a):.4f} | decode_accuracy {dec_accuracy}')
+            print(f'Subject {subj} | corr_mean {np.mean(scores_a):.4f} | decode_accuracy {accuracy}')
 
         if wandb_upload:
                 wandb.log({'window': block_size, 'corr_subj_mean': np.mean(eval_mean_results), 'corr_subj_std': np.std(eval_mean_results), 'decAcc_subj_mean': np.mean(dec_results), 'decAcc_subj_std': np.std(dec_results)})
@@ -140,6 +152,7 @@ if __name__ == "__main__":
     # Definir los argumentos que quieres aceptar
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--linear_model", type=str, default='CCA', help="Select the linear model between Ridge or CCA")
     parser.add_argument("--fixed", type=str2bool, default='False', help="Static Jaulab trials")
     parser.add_argument("--rnd_trials", type=str2bool, default='False', help="Random trial selection")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
@@ -159,6 +172,7 @@ if __name__ == "__main__":
     main(
         args.dataset,
         args.key,
+        args.linear_model,
         args.fixed,
         args.rnd_trials,
         args.wandb,
