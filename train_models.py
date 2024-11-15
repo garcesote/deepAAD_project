@@ -124,7 +124,8 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
             train_loader = DataLoader(train_set, batch_size, shuffle=True, pin_memory=True)
             val_loader = DataLoader(val_set, val_bs, shuffle= not unit_output, pin_memory=True)
 
-            optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
+            optimizer = torch.optim.Adam(mdl.parameters(), lr=lr)
+            # optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
             scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience, verbose=True)
 
             # Early stopping parameters
