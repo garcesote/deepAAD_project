@@ -33,14 +33,14 @@ class CCA_AAD:
         n_components: defines the dimensions of the projected subspace (by default: min(encoder_len, decoder_len))
 
     """
-    def __init__(self, encoder_len:int, decoder_len:int, trial_len:int, n_components:int = None):
+    def __init__(self, encoder_len:int, decoder_len:int, trial_len:int, n_components:int = None, max_iter:int = 500, tol:float = 1e-06):
         
         self.encoder_len = encoder_len
         self.decoder_len = decoder_len
         self.trial_len = trial_len
         self.n_components = n_components if n_components is not None else min(encoder_len, decoder_len)
 
-        self.model = CCA(n_components=n_components)
+        self.model = CCA(n_components=n_components, max_iter=max_iter, tol=tol)
         self.classf = LinearDiscriminantAnalysis()
 
     def fit_CCA(self, eeg, stim):
@@ -170,8 +170,10 @@ class CCA_AAD:
         scores_b = self.score_in_batches(eeg, stimb, batch_size)
 
         # Difference between scores as the function to classify
-        f_att = scores_a - scores_b
-        f_unatt = scores_b - scores_a
+        # f_att = scores_a - scores_b
+        # f_unatt = scores_b - scores_a
+        f_att = scores_a
+        f_unatt = scores_b
 
         # Concatenate the scores and generate a label array to feed LDA
         scores = np.vstack((f_att, f_unatt))
@@ -204,8 +206,10 @@ class CCA_AAD:
         scores_b = self.score_in_batches(eeg, stimb, batch_size)
 
         # Difference between scores as the function to classify
-        f_att = scores_a - scores_b
-        f_unatt = scores_b - scores_a
+        # f_att = scores_a - scores_b
+        # f_unatt = scores_b - scores_a
+        f_att = scores_a
+        f_unatt = scores_b
 
         att_correct = 0
         # Transorm into a 1D space with LDA

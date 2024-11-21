@@ -56,15 +56,15 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         fixed = ds_config['fixed']
         rnd_trials = ds_config['rnd_trials']
         unit_output = ds_config['unit_output']
-        val_bs = batch_size if unit_output else 1 # batch size equals 1 when estamiting a window instead of a single output
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
         val_hop = ds_config['hop'] if not unit_output else 1
+        val_bs = 1 if not unit_output and dec_acc else batch_size # batch size equals 1 when estamiting a window instead of a single output
 
         # Saving paths
         mdl_save_path = os.path.join(global_path, 'results', exp_name, key, 'models')
         metrics_save_path = os.path.join(global_path, 'results', exp_name, key, 'metrics')
 
-        # # Population mode that generates a model for all samples
+        # Population mode that generates a model for all samples
         if key == 'population':
             selected_subj = [get_subjects(dataset)]
         else:
@@ -257,14 +257,14 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/gradient_tracking/band_analysis.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/replicate_results/train_vlaai.yaml", help="Ruta al archivo config")
     # parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
-    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--dataset", type=str, default='skl', help="Dataset")
+    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
 

@@ -44,7 +44,7 @@ def main(config, wandb_upload, dataset, key):
             train_params = run['train_params']
             
             unit_output = ds_config['unit_output']
-            preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else 'fulsang'
+            preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else None
             data_path = get_data_path(global_data_path, dataset, preproc_mode = preproc_mode)
             window_len = ds_config['window_len'] if unit_output else eval_window
             hop = ds_config['hop'] if not unit_output else 1

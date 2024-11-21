@@ -75,14 +75,20 @@ def run_experiment(dataset, key, train=True, eval=True, train_ridge=True, eval_r
 #     print(cmd)
 #     subprocess.run(cmd)
 
-
-subprocess.run(["py", r"C:\Users\jaulab\Desktop\AAD\VLAAI\train.py"])
+# cmd = [
+#     "py", "train_linear.py", 
+#     "--config", "configs/linear_models/cca_tunning.yaml",
+#     "--key", 'subj_specific',
+#     "--dataset", 'fulsang'
+# ]  
+# print(cmd)
+# subprocess.run(cmd)
 
 cmd = [
-    "py", "train_models.py", 
-    "--config", "configs/replicate_results/train_vlaai.yaml",
-    "--key", 'population',
-    "--dataset", 'skl',
+    "py", "eval_linear.py", 
+    "--config", "configs/linear_models/cca_tunning.yaml",
+    "--key", 'subj_specific',
+    "--dataset", 'fulsang',
     "--wandb"
 ]  
 print(cmd)
