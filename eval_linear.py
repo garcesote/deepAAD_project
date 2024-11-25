@@ -49,8 +49,8 @@ def main(
             model = f"{linear_model}_start={model_params['start_lag']}_end={model_params['end_lag']}"
         elif linear_model == 'CCA':
             model = f"{linear_model}_enc={model_params['encoder_len']}_dec={model_params['decoder_len']}_comp={model_params['n_components']}"
-            if 'max_iter' in model_params.keys(): model_name += ('_max_iter=' + str(model_params['max_iter']))
-            if 'tol' in model_params.keys(): model_name += ('_tol=' + str(model_params['tol']))
+            if 'max_iter' in model_params.keys(): model += ('_max_iter=' + str(model_params['max_iter']))
+            if 'tol' in model_params.keys(): model += ('_tol=' + str(model_params['tol']))
         else: raise ValueError("Introduce a valid linear model name between 'Ridge' and 'CCA'")
 
         if preproc_mode is not None:

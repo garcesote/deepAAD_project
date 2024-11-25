@@ -58,7 +58,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         unit_output = ds_config['unit_output']
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
         val_hop = ds_config['hop'] if not unit_output else 1
-        val_bs = 1 if not unit_output and dec_acc else batch_size # batch size equals 1 when estamiting a window instead of a single output
+        # val_bs = 1 if not unit_output and dec_acc else batch_size # batch size equals 1 when estamiting a window instead of a single output
 
         # Saving paths
         mdl_save_path = os.path.join(global_path, 'results', exp_name, key, 'models')
@@ -122,7 +122,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                                     fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output, eeg_band = eeg_band)
             
             train_loader = DataLoader(train_set, batch_size, shuffle=True, pin_memory=True)
-            val_loader = DataLoader(val_set, val_bs, shuffle= not unit_output, pin_memory=True)
+            val_loader = DataLoader(val_set, batch_size, shuffle= not unit_output, pin_memory=True)
 
             optimizer = torch.optim.Adam(mdl.parameters(), lr=lr)
             # optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)

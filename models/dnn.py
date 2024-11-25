@@ -96,15 +96,14 @@ class CNN(nn.Module):
 
             # add feature dimension and transpose 
             input = input.transpose(1, 2) # (B, C, T) => (B, T, C)
-            x = input.unsqueeze(1) 
-
-            x = self.temporal(x)
-            x = self.spatial(x)
-            x = self.depthwise(x)
-            x = self.classifier(x)
+            x = input.unsqueeze(1) # (B, T, C) => (B, 1, T, C)
+            x = self.temporal(x) # (B, 1, T, C) => (B, F1, T, C)
+            x = self.spatial(x) # (B, F1, T, C) => (B, F1*D, T, 1)
+            x = self.depthwise(x) # (B, F1*D, T, 1) => (B, F2, T, 1)
+            preds = self.classifier(x) # (B, F2, T, 1) => (B, F2*T) => (B, n_out)
 
             if x.shape[-1] == 1: # when generating a unit output
-                preds = torch.squeeze(x)
+                preds = torch.squeeze(preds)
 
             if targets is None:
                 loss = None

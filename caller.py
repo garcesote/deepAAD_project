@@ -76,19 +76,20 @@ def run_experiment(dataset, key, train=True, eval=True, train_ridge=True, eval_r
 #     subprocess.run(cmd)
 
 # cmd = [
-#     "py", "train_linear.py", 
-#     "--config", "configs/linear_models/cca_tunning.yaml",
-#     "--key", 'subj_specific',
-#     "--dataset", 'fulsang'
+#     "py", "train_models.py", 
+#     "--config", "configs/gradient_tracking/window_output.yaml",
+#     "--key", 'population',
+#     "--dataset", 'skl',
+#     "--wandb"
 # ]  
 # print(cmd)
 # subprocess.run(cmd)
 
 cmd = [
-    "py", "eval_linear.py", 
-    "--config", "configs/linear_models/cca_tunning.yaml",
-    "--key", 'subj_specific',
-    "--dataset", 'fulsang',
+    "py", "evaluate.py", 
+    "--config", "configs/gradient_tracking/window_output.yaml",
+    "--key", 'population',
+    "--dataset", 'skl',
     "--wandb"
 ]  
 print(cmd)
