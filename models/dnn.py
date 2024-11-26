@@ -3,31 +3,32 @@ import torch.nn as nn
 from torch.nn import functional as F
 import numpy as np
 import scipy
-from utils.functional import correlation
+from utils.functional import get_loss
 
 # model description
-
 class FCNN(nn.Module):
 
-    def __init__(self, n_hidden, dropout=0.45, n_chan=63, n_samples=50, unit_output=True):
+    def __init__(self, n_hidden, dropout=0.45, n_chan=63, n_samples=50, output_dim=1):
         
         super().__init__()
         self.input_dim = n_chan * n_samples
         self.n_chan = n_chan
         self.n_samples = n_samples
-        self.unit_output = unit_output
-        self.output_dim = 1 if unit_output else n_samples
+        self.output_dim = output_dim
         layers = []
 
         # First flatten layer (B, T x C)
         layers.append(nn.Flatten(1, -1))
 
+        # When predicting window calculate the prearsonr mean
+        self.window_pred = True if self.n_samples == self.output_dim else False
+
         # Hidden layers
         for k in range(n_hidden):
-                layers.append(nn.Linear(int(self.input_dim - self.input_dim / (n_hidden+1) * k), 
-                              int(self.input_dim - self.input_dim / (n_hidden+1) * (k+1)))) # layers with desired neurons
-                layers.append(nn.Tanh())
-                layers.append(nn.Dropout(p = dropout))
+            layers.append(nn.Linear(int(self.input_dim - self.input_dim / (n_hidden+1) * k), 
+                            int(self.input_dim - self.input_dim / (n_hidden+1) * (k+1)))) # layers with desired neurons
+            layers.append(nn.Tanh())
+            layers.append(nn.Dropout(p = dropout))
 
         # Output layer
         layers.append(nn.Linear(int(self.input_dim / (n_hidden+1)), self.output_dim))
@@ -37,21 +38,20 @@ class FCNN(nn.Module):
     def forward(self, input, targets=None):
         # input shape must be (batch, n_chan, n_samples)
         if list(input.shape) == [input.shape[0], self.n_chan, self.n_samples]:
+            
             preds = self.model(input)
-            if preds.shape[-1] == 1: # when generating unit_output
-                preds = torch.squeeze(self.model(input)) # generates an output with shape (batch, 1) => for each batch generates a single envelope prediction
+            
             if targets is None:
                 loss = None
             else:
-                loss = - correlation(preds, targets, batch_dim = self.unit_output)
+                loss = get_loss(preds, targets, window_pred=self.window_pred)
             return preds, loss
         else:
             raise ValueError("Se debe introducir un tensor con las dimensiones adecuadas (B, C, T)")
-        
 
 class CNN(nn.Module):
 
-    def __init__(self, F1=8, D=8, F2=64, AP1 = 2, AP2 = 4, dropout = 0.2, input_channels=64, input_samples=50, unit_output=True):
+    def __init__(self, F1=8, D=8, F2=64, AP1 = 2, AP2 = 4, dropout = 0.2, input_channels=64, input_samples=50, output_dim=1):
 
         super().__init__()
         self.F1 = F1
@@ -59,8 +59,10 @@ class CNN(nn.Module):
         self.D = D
         self.input_channels = input_channels
         self.input_samples = input_samples
-        self.unit_output = unit_output
-        self.output_dim = 1 if unit_output else input_samples
+        self.output_dim = output_dim
+
+        # When predicting window calculate the prearsonr mean
+        self.window_pred = True if self.input_samples == self.output_dim else False
 
         # input with shape (B, 1, T, C) => outputs (B, F1, T, C)
         self.temporal = nn.Sequential(
@@ -102,13 +104,10 @@ class CNN(nn.Module):
             x = self.depthwise(x) # (B, F1*D, T, 1) => (B, F2, T, 1)
             preds = self.classifier(x) # (B, F2, T, 1) => (B, F2*T) => (B, n_out)
 
-            if x.shape[-1] == 1: # when generating a unit output
-                preds = torch.squeeze(preds)
-
             if targets is None:
                 loss = None
             else:
-                loss = -correlation(targets, preds, batch_dim=self.unit_output)
+                loss = get_loss(targets, preds, window_pred=self.window_pred)
             return preds, loss
         else:
             raise ValueError('El input de la red tiene que guardar dimensiones (B, C, T)')

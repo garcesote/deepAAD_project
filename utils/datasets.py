@@ -3,7 +3,7 @@ import scipy
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from utils.functional import get_other_subjects, get_trials, get_leave_one_out_trials, normalize_eeg, normalize_stim, get_SKL_subj_idx
+from utils.functional import get_other_subjects, get_trials, get_leave_one_out_trials, normalize_eeg, get_data_path, get_SKL_subj_idx
 import gc 
 
 class CustomDataset(Dataset):
@@ -47,9 +47,12 @@ class CustomDataset(Dataset):
         In subject-specific mode trials are shuffled while in population mode, trials for eval.
         the excluded subject (val and test) are selected one-by-one.  
 
-    unit_output: bool
-        select if you want your dataset to return a stima window or a unit value of stima in case
-        the network returns a single value 
+    window_pred: bool
+        select if you want your dataset to return a stima window or unit values of stim in case
+        the network returns a single value
+
+    hrtf: bool
+        when true raturn the hrtf audio envelopes with the channels on the left and right
 
     __len__()
     -------
@@ -65,7 +68,8 @@ class CustomDataset(Dataset):
 
     def __init__(self, dataset, data_path, split, subjects, window, hop, 
                  norm_stim=False, data_type = 'mat', leave_one_out = False,
-                 fixed=False, rnd_trials=False, unit_output=True, eeg_band= None):
+                 fixed=False, rnd_trials=False, window_pred=True, hrtf=False,
+                 eeg_band= None):
 
         if not isinstance(subjects, list):
             subjects = [subjects]
@@ -90,7 +94,8 @@ class CustomDataset(Dataset):
         self.rnd_trials = rnd_trials
         self.norm_stim = norm_stim
         self.leave_one_out = leave_one_out
-        self.unit_ouput = unit_output
+        self.window_pred = window_pred
+        self.hrtf = hrtf
         self.eeg_band = eeg_band
 
         if dataset == 'fulsang':
@@ -124,30 +129,36 @@ class CustomDataset(Dataset):
         for subject in self.subjects:
 
             if self.data_type == 'mat': 
+
+                # Load the eeg data
                 preproc_data = scipy.io.loadmat(os.path.join(self.data_path ,subject + '_data_preproc.mat'))
                 eeg_data = preproc_data['data']['eeg'][0,0][0,trials]
-                stima_data = preproc_data['data']['wavA'][0,0][0,trials]
-                stimb_data = preproc_data['data']['wavB'][0,0][0,trials]
                 self.chan_idx = preproc_data['data']['dim'][0,0][0,0]['chan']['eeg'][0,0][0,0]
                 self.chan_idx = np.array([chan[0] for chan in self.chan_idx[0]])
-                # si hay mas canales de la cuenta selecciono los 64 primeros
+                # Select the 64 first eeg channels
                 if eeg_data[0].shape[1] > 64:
                     eeg_data = [trial[:,:64] for trial in eeg_data]
                     self.chan_idx = self.chan_idx[:64]
                 
-                # Normalizar trials eeg y formar tensor con shape (trials, channels, samples) / (trials, samples)
-                # eeg_data = torch.stack([normalize_eeg(torch.tensor(eeg_data[trial]).T) for trial in range(self.n_trials)], dim=0)
-                # eeg_data = eeg_data.view(eeg_data.shape[1], eeg_data.shape[0] * eeg_data.shape[2])
-                # eeg_data = torch.hstack([normalize_eeg(torch.tensor(eeg_data[trial]).T) for trial in range(self.n_trials)])
-                # Concatenar en un tensor todas os trials del sujeto (muestras * trials, canales) => (T * N, C).T => (C, T * N)
-                # eeg.append(torch.hstack([normalize_eeg(torch.tensor(eeg_data[trial]).T) for trial in range(self.n_trials)]))
-                # stima.append(torch.squeeze(torch.vstack([torch.tensor(stima_data[trial]) for trial in range(self.n_trials)])))
-                # stimb.append(torch.squeeze(torch.vstack([torch.tensor(stimb_data[trial]) for trial in range(self.n_trials)])))
+                # Load mono stim data
+                if not self.hrtf:
+                    stima_data = preproc_data['data']['wavA'][0,0][0,trials]
+                    stimb_data = preproc_data['data']['wavB'][0,0][0,trials]
                 
-                eeg_data = torch.hstack([normalize_eeg(torch.tensor(eeg_data[trial]).T) for trial in range(self.n_trials)])
-                stima_data = torch.squeeze(torch.vstack([torch.tensor(stima_data[trial]) for trial in range(self.n_trials)]))
-                stimb_data = torch.squeeze(torch.vstack([torch.tensor(stimb_data[trial]) for trial in range(self.n_trials)]))
+                # Load HRTF stim data, the folder containing HRTF info. must be on the parent data_path dir
+                else:
+                    parent_dir = os.path.dirname(self.data_path)
+                    hrtfs_path = os.path.join(parent_dir, 'HRTFs')
+                    hrtfs_data = scipy.io.loadmat(os.path.join(hrtfs_path ,subject + '_hrtfs.mat'))
 
+                    stima_data = [hrtfs_data['wavs'][:,0][trial]['wavA'][0,0] for trial in trials]
+                    stimb_data = [hrtfs_data['wavs'][:,0][trial]['wavB'][0,0] for trial in trials]
+                
+                # Concatenate the trials on the temporal dim
+                eeg_data = torch.hstack([normalize_eeg(torch.tensor(eeg_data[trial]).T) for trial in range(self.n_trials)])
+                stima_data = torch.vstack([torch.tensor(stima_data[trial]) for trial in range(self.n_trials)]).T
+                stimb_data = torch.vstack([torch.tensor(stimb_data[trial]) for trial in range(self.n_trials)]).T
+                
             elif self.data_type == 'npy':
                 folder_name = 'eeg' if self.eeg_band is None else 'eeg_band_' + self.eeg_band
                 eeg_data = np.load(os.path.join(self.data_path, folder_name, subject+'_eeg.npy'), allow_pickle=True)[trials]
@@ -170,7 +181,7 @@ class CustomDataset(Dataset):
             stimb.append(stimb_data)
 
         # Concateno en un tensor global la información de los SUJETOS INDICADOS
-        return torch.hstack(eeg), torch.cat(stima), torch.cat(stimb)
+        return torch.hstack(eeg), torch.hstack(stima), torch.hstack(stimb)
 
     def get_SKL_data(self):
     
@@ -285,36 +296,6 @@ class CustomDataset(Dataset):
             stima.append(stima_data)
             stimb.append(stimb_data)
 
-            # preproc_data = scipy.io.loadmat(os.path.join(self.data_path ,subject + '_preproc.mat'))
-
-            # # Array con n trials y dentro las muestras de audio y eeg
-            # stima_data = preproc_data['data']['wavA'][0,0][0,trials]
-            # stimb_data = preproc_data['data']['wavB'][0,0][0,trials]
-            # # channel info doesn't appear on the data.mat matrix
-            # # self.chan_idx = preproc_data['data']['dim'][0,0][0,0]['chan']['eeg'][0,0][0,0]
-            # # self.chan_idx = np.array([chan[0] for chan in self.chan_idx[0]])
-            # n_trial = len(trials)
-
-            # if self.filt:
-            #     eeg_data = np.load(os.path.join(self.filt_path, subject+'_data_filt.npy'), allow_pickle=True)[trials]
-            # else:
-            #     eeg_data = preproc_data['data']['eeg'][0,0][0,trials]
-
-            # # Normalizar eeg
-            # norm_eeg = [normalize_eeg(torch.tensor(eeg_data[trial]).T) for trial in range(n_trial)]
-
-            # # Añadir canales con zero padding si estos no llegan a 64: puede haber sujetos con 63, 62 o 61 electrodos
-            # n_channels = eeg_data[0].shape[1] 
-            # rest_channels = 61 - n_channels
-            # zero_channels = torch.zeros((rest_channels, norm_eeg[0].shape[1]))
-            # zero_eeg = [torch.cat((norm_eeg[trial], zero_channels), dim=0) for trial in range(n_trial)]
-            # # zero_eeg = norm_eeg
-
-            # # Concatenar en un tensor todas los trials del sujeto (muestras * trials, canales) => (T * N, C).T => (C, T * N)
-            # eeg.append(torch.hstack([zero_eeg[trial] for trial in range(n_trial)]))
-            # stima.append(torch.squeeze(torch.vstack([torch.tensor(stima_data[trial]) for trial in range(n_trial)])) if not self.norm_stim else torch.squeeze(normalize_stim(torch.vstack([torch.tensor(stima_data[trial]) for trial in range(n_trial)]))))
-            # stimb.append(torch.squeeze(torch.vstack([torch.tensor(stimb_data[trial]) for trial in range(n_trial)])) if not self.norm_stim else torch.squeeze(normalize_stim(torch.vstack([torch.tensor(stimb_data[trial]) for trial in range(n_trial)]))))
-
         # Concateno en un tensor global la información de los SUJETOS INDICADOS
         return torch.hstack(eeg), torch.cat(stima), torch.cat(stimb)
     
@@ -328,9 +309,9 @@ class CustomDataset(Dataset):
         end = start + self.window
 
         eeg = self.eeg[:, start:end] 
-        stima = self.stima[start] if self.unit_ouput else self.stima[start:end]
+        stima = self.stima[:, start] if not self.window_pred else self.stima[0, start:end]
         if self.dataset != 'skl':
-            stimb = self.stimb[start] if self.unit_ouput else self.stimb[start:end]
+            stimb = self.stimb[:, start] if not self.window_pred else self.stimb[0, start:end]
             return {'eeg':eeg, 'stima':stima, 'stimb':stimb}
         else:
             return {'eeg':eeg, 'stima':stima}

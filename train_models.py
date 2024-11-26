@@ -4,7 +4,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from models.dnn import FCNN, CNN
 from models.vlaai import VLAAI
 from models.eeg_conformer import Conformer, ConformerConfig
-from utils.functional import get_data_path, get_channels, get_subjects, set_seeds, correlation
+from utils.functional import get_data_path, get_channels, get_subjects, set_seeds, get_loss
 from utils.datasets import CustomDataset
 from tqdm import tqdm
 import argparse
@@ -17,7 +17,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'gradient_tracking'
+    project = 'spatial_audio'
     exp_name = config['exp_name'] + '_' + dataset
     config['dataset'] = dataset
     config['key'] = key
@@ -55,14 +55,14 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
         fixed = ds_config['fixed']
         rnd_trials = ds_config['rnd_trials']
-        unit_output = ds_config['unit_output']
+        hrtf = ds_config['hrtf']
+        window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
-        val_hop = ds_config['hop'] if not unit_output else 1
-        # val_bs = 1 if not unit_output and dec_acc else batch_size # batch size equals 1 when estamiting a window instead of a single output
+        val_hop = ds_config['hop'] if window_pred else 1
 
         # Saving paths
-        mdl_save_path = os.path.join(global_path, 'results', exp_name, key, 'models')
-        metrics_save_path = os.path.join(global_path, 'results', exp_name, key, 'metrics')
+        mdl_save_path = os.path.join(global_path, 'results', project, key, 'models')
+        metrics_save_path = os.path.join(global_path, 'results', project, key, 'metrics')
 
         # Population mode that generates a model for all samples
         if key == 'population':
@@ -86,11 +86,9 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
             # LOAD THE MODEL
             if model == 'FCNN':
                 run['model_params']['n_chan'] = get_channels(dataset)
-                run['model_params']['unit_output'] = unit_output
                 mdl = FCNN(**run['model_params'])
             elif model == 'CNN':
                 run['model_params']['input_channels'] = get_channels(dataset)
-                run['model_params']['unit_output'] = unit_output
                 mdl = CNN(**run['model_params'])
             elif model == 'VLAAI':
                 run['model_params']['input_channels'] = get_channels(dataset)
@@ -98,7 +96,6 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
             elif model == 'Conformer':
                 run['model_params']['eeg_channels'] = get_channels(dataset)
                 run['model_params']['kernel_chan'] = get_channels(dataset)
-                run['model_params']['unit_output'] = unit_output
                 mdl_config = ConformerConfig(**run['model_params'])
                 mdl = Conformer(mdl_config)
             else:
@@ -117,15 +114,14 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
 
             # LOAD THE DATA
             train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, data_type=data_type, leave_one_out=leave_one_out,  
-                                       fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output, eeg_band=eeg_band)
+                                       fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band=eeg_band)
             val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=val_hop, data_type=data_type, leave_one_out=leave_one_out, 
-                                    fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output, eeg_band = eeg_band)
+                                    fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band = eeg_band)
             
             train_loader = DataLoader(train_set, batch_size, shuffle=True, pin_memory=True)
-            val_loader = DataLoader(val_set, batch_size, shuffle= not unit_output, pin_memory=True)
+            val_loader = DataLoader(val_set, batch_size, shuffle= window_pred, pin_memory=True)
 
-            optimizer = torch.optim.Adam(mdl.parameters(), lr=lr)
-            # optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
+            optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
             scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience, verbose=True)
 
             # Early stopping parameters
@@ -163,7 +159,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                     optimizer.step()
                     
                     # Append neg. loss corresponding to the coef. Pearson
-                    train_loss.append(-loss)
+                    train_loss.append(loss)
 
                     # Actualize the state of the train loss
                     train_loader_tqdm.set_postfix({'train_loss': loss})
@@ -185,30 +181,30 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                         if dec_acc:
                             stimb = data['stimb'].to(device, dtype=torch.float)
                             # Decoding accuracy of the model
-                            unat_loss = correlation(stimb, preds, batch_dim=unit_output)
-                            if -loss.item() > unat_loss.item():
+                            unat_loss = get_loss(stimb, preds, window_pred=window_pred)
+                            if loss.item() < unat_loss.item():
                                 val_att_corr += 1
 
-                        val_loss.append(-loss)
+                        val_loss.append(loss)
 
                 mean_val_loss = torch.mean(torch.hstack(val_loss)).item()
                 mean_train_loss = torch.mean(torch.hstack(train_loss)).item()
                 val_decAccuracy = val_att_corr / len(val_loader) * 100
 
-                scheduler.step(mean_val_loss)
+                scheduler.step(-mean_val_loss)
 
                 # Logging metrics
-                print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
+                print(f'Epoch: {epoch} | Train loss: {-mean_train_loss:.4f} | Val loss/acc: {-mean_val_loss:.4f}/{val_decAccuracy:.4f}')
                 
                 if wandb_upload:
-                    wandb.log({'train_loss': -mean_train_loss, 'val_loss': -mean_val_loss, 'val_acc': val_decAccuracy})
+                    wandb.log({'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy})
             
                 train_mean_loss.append(mean_train_loss)
                 val_mean_loss.append(mean_val_loss)
                 val_decAccuracies.append(val_decAccuracy)
 
                 # Save best results
-                if mean_val_loss > best_accuracy or epoch == 0:
+                if mean_val_loss < best_accuracy or epoch == 0:
                     # best_train_loss = mean_train_accuracy
                     best_accuracy = mean_val_loss
                     best_epoch = epoch
@@ -257,14 +253,14 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/replicate_results/train_vlaai.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/spatial_audio/dnn_models.yaml", help="Ruta al archivo config")
     # parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
-    parser.add_argument("--dataset", type=str, default='skl', help="Dataset")
-    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
+    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
 

@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
 from dataclasses import dataclass
-from utils.functional import correlation
+from utils.functional import get_loss
 import math
 
 class LayerNorm(nn.Module):
@@ -178,7 +178,7 @@ class ClassificationHead(nn.Sequential):
         self.dim_chanConv = config.eeg_channels - config.kernel_chan + 1
         self.dim_pool = (self.dim_tempConv - config.pool) // config.pool_hop + 1
         self.input_size = self.dim_pool * self.dim_chanConv * config.n_embd
-        self.output_dim = 1 if config.unit_output else config.block_size
+        self.output_dim = config.output_dim
 
         if config.classifier:
             self.fc = nn.Sequential(
@@ -217,7 +217,8 @@ class ConformerConfig:
     block_size: int = 128 # 2s
     dropout: float = 0.4
     classifier: bool = True
-    unit_output: bool = True
+    output_dim: int = 1
+
     bias: bool = True # True: bias in Linears and LayerNorms. False: a bit better and faster 
 
 class Conformer(nn.Sequential):
@@ -239,6 +240,9 @@ class Conformer(nn.Sequential):
         self.embed = PatchEmbedding(config)
         self.encoder = TransformerEncoder(config)
         self.classif = ClassificationHead(config)
+
+        # When predicting window calculate the prearsonr mean
+        self.window_pred = True if config.block_size == config.output_dim else False
 
         # report number of parameters
         print("Number of parameters: %.2fM" % (self.get_num_params()/1e6,))
@@ -286,7 +290,7 @@ class Conformer(nn.Sequential):
             preds = torch.squeeze(preds)
 
         if targets is not None:
-            loss = - correlation(preds, targets, batch_dim=self.config.unit_output)
+            loss = get_loss(preds, targets, window_pred=self.window_pred)
         else:
             loss = None
         return preds, loss

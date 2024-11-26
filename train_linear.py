@@ -18,7 +18,8 @@ def main(
     # Data path parameters
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    mdl_save_path = global_path + '/results/'+key+'/models'
+    project = 'spatial_audio'
+    mdl_save_path = os.path.join(global_path, 'results', project, key, 'models')
 
     for n, run in enumerate(config['runs']):
 
@@ -28,6 +29,7 @@ def main(
         dataset_params = run['dataset_params']
         fixed = dataset_params['fixed']
         rnd_trials = dataset_params['rnd_trials']
+        hrtf = dataset_params['hrtf'] if 'hrtf' in dataset_params.keys() else False
         preproc_mode = dataset_params['preproc_mode'] if 'preproc_mode' in dataset_params.keys() else None
         data_type = dataset_params['data_type'] if 'data_type' in dataset_params.keys() else 'mat'
         eeg_band = dataset_params['eeg_band'] if 'eeg_band' in dataset_params.keys() else None
@@ -58,9 +60,9 @@ def main(
 
             # LOAD THE DATA
             train_set = CustomDataset(dataset, data_path, 'train', subj, window=trial_len, hop=trial_len, data_type=data_type, 
-                                        leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, eeg_band=eeg_band)
+                                        leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, hrtf=hrtf, eeg_band=eeg_band)
             val_set = CustomDataset(dataset, data_path, 'val',  subj, window=trial_len, hop=trial_len, data_type=data_type, 
-                                    leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, eeg_band=eeg_band)
+                                    leave_one_out=leave_one_out, fixed=fixed, rnd_trials = rnd_trials, hrtf=hrtf, eeg_band=eeg_band)
 
             if linear_model == 'Ridge':
 
@@ -136,7 +138,7 @@ if __name__ == "__main__":
     os.environ["VECLIB_MAXIMUM_THREADS"] = "8"  # Para bibliotecas vecLib en macOS
     
     # Definir los argumentos que quieres aceptar
-    parser.add_argument("--config", type=str, default='configs/linear_models/cca_tunning.yaml')
+    parser.add_argument("--config", type=str, default='configs/spatial_audio/linear_models.yaml')
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     

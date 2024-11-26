@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from utils.functional import correlation
+from utils.functional import get_loss
 
 class LayerNorm_perm(nn.Module):
 
@@ -271,6 +271,7 @@ class VLAAI(nn.Module):
         stack_model=None,
         output_context_model=None,
         use_skip = True,
+        window_pred = False,
         input_channels = 64,
         output_dim = 1,
         dropout = 0.2
@@ -288,6 +289,7 @@ class VLAAI(nn.Module):
         
         self.stack_model = stack_model
         self.output_context_model = output_context_model
+        self.window_pred = window_pred
         self.linear = Linear_Perm(stack_model.filters[-1], input_channels, d=dropout)
         self.out_linear = Linear_Perm(output_context_model.n_filters, output_dim, d=0)
 
@@ -321,5 +323,5 @@ class VLAAI(nn.Module):
         if targets is None:
             loss = None
         else:
-            loss = - correlation(x, targets, batch_dim=False)
+            loss = get_loss(x, targets, window_pred= self.window_pred)
         return x, loss

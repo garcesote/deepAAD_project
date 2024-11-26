@@ -107,7 +107,7 @@ def get_other_subjects(subject, dataset):
     return other_subjects
 
 # Calculates the pearson correlation between two tensors
-def correlation(x: torch.tensor, y: torch.tensor, eps=1e-8, batch_dim=True):
+def get_loss(x: torch.tensor, y: torch.tensor, eps=1e-8, window_pred=False, mode='mean'):
 
     """Correlation function that returns calculation the Person's coef
     
@@ -116,34 +116,31 @@ def correlation(x: torch.tensor, y: torch.tensor, eps=1e-8, batch_dim=True):
 
     x, y: tensor
         two vectors for calculating the correlation, must have the same dims
+        In stim case dims introduce (n_stim, n_samples) where in case of unit
+        output n_stim=1, case hrtf n_stim=2, case window_pred n_stim=batch_size
 
     eps: 1e-8 by default applied on the formula
     
-    batch_dim: bool
-        select wether you're introducing vectors to compute the corr on batch_dim (default: True)
-        or you calculate multiple correlations for the batch_dim and then compute the mean
+    window_pred: bool
+        when the window is estimated there's no need for transpose dims
 
     """
-    vx = x - torch.mean(x)
-    vy = y - torch.mean(y)
 
-    if batch_dim:
-        corr = torch.sum(vx * vy) / (torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)) + eps)
-    else:
-        corr = torch.sum(vx * vy, dim=1) / (torch.sqrt(torch.sum(vx ** 2, dim=1)) * torch.sqrt(torch.sum(vy ** 2, dim=1)) + eps)
-        corr = torch.mean(corr)
+    if not window_pred:
+        x, y = x.T, y.T # (n_stim, n_samples)
 
-        # IS THE SAME AS GETTING IT ON BATCH DIM AND THEN COMPUTE THE MEAN
-        # corr_list = torch.zeros((x.shape[0]))
-        # for n, (x_b, y_b) in enumerate(zip(x, y)):
-        #     vx_b = x_b - torch.mean(x_b)
-        #     vy_b = y_b - torch.mean(y_b)
+    # Compute the correlation for all channels or batches
+    n_stim, n_samples = x.shape
+    corr = torch.zeros((n_stim, ))
+    for chan, (pred, target) in enumerate(zip(x, y)):
+        vx = pred - torch.mean(pred)
+        vy = target - torch.mean(pred)
+        corr[chan] = torch.sum(vx * vy) / (torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)) + eps)
 
-        #     corr_b = torch.sum(vx_b * vy_b) / (torch.sqrt(torch.sum(vx_b ** 2)) * torch.sqrt(torch.sum(vy_b ** 2)) + eps)
-        #     corr_list[n] = corr_b
-        # corr = torch.mean(corr_list)
-
-    return corr
+    if mode == 'mean':
+        return torch.mean(- corr)
+    else: # for classifying the correlations
+        return(corr)
     
 # Returns the filename related to the subject solving the problem of S1
 def get_filename(mdl_folder_path, subject):
@@ -159,7 +156,7 @@ def get_filename(mdl_folder_path, subject):
                 filename = file
     return filename
 
-# Return datapath
+# Return used datapaths
 def get_data_path(global_data_path:str, dataset:str, preproc_mode=None):
     
     paths = {'hugo_path': "/Hugo_2022/hugo_preproc_data",

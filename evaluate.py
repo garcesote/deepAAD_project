@@ -1,5 +1,5 @@
 import torch
-from utils.functional import set_seeds, get_data_path, get_channels, get_subjects, get_filename, correlation
+from utils.functional import set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
 from utils.datasets import CustomDataset
 from torch.utils.data import DataLoader
 from models.dnn import FCNN, CNN
@@ -33,7 +33,7 @@ def main(config, wandb_upload, dataset, key):
         model = run['model']
         # exp_name = ('_').join([key, dataset, model])
 
-        mdl_save_path = os.path.join(global_path, 'results', exp_name, key, 'models')
+        mdl_save_path = os.path.join(global_path, 'results', project, key, 'models')
 
         if wandb_upload: wandb.init(project=project, name=exp_name, tags=['evaluation'], config=run)
 
@@ -43,20 +43,21 @@ def main(config, wandb_upload, dataset, key):
             ds_config = run['dataset_params']
             train_params = run['train_params']
             
-            unit_output = ds_config['unit_output']
+            window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
             preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else None
             data_path = get_data_path(global_data_path, dataset, preproc_mode = preproc_mode)
-            window_len = ds_config['window_len'] if unit_output else eval_window
-            hop = ds_config['hop'] if not unit_output else 1
+            window_len = ds_config['window_len'] if not window_pred else eval_window
+            hop = ds_config['hop'] if window_pred else 1
             leave_one_out = True if key == 'subj_independent' else False
             data_type = ds_config['data_type'] if 'data_type' in ds_config.keys() else 'mat'
             eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
             fixed = ds_config['fixed']
             rnd_trials = ds_config['rnd_trials']
+            hrtf = ds_config['hrtf']
             time_shift = 100
             dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
+            batch_size =  eval_window if not window_pred else 1
 
-            batch_size =  eval_window if unit_output else 1
             lr = float(train_params['lr'])
 
             if fixed: assert(dataset=='jaulab') # Only fixed subject for jaulab dataset
@@ -119,8 +120,8 @@ def main(config, wandb_upload, dataset, key):
 
                 # LOAD THE DATA
                 test_set = CustomDataset(dataset, data_path, 'test', subj, window=window_len, hop=hop, data_type=data_type, leave_one_out=leave_one_out, 
-                                        fixed=fixed, rnd_trials = rnd_trials, unit_output=unit_output, eeg_band=eeg_band)
-                test_loader = DataLoader(test_set, batch_size, shuffle=not unit_output, pin_memory=True)
+                                        fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band=eeg_band)
+                test_loader = DataLoader(test_set, batch_size, shuffle=window_pred, pin_memory=True)
                 
                 # EVALUATE THE MODEL
                 corr = []
@@ -136,18 +137,17 @@ def main(config, wandb_upload, dataset, key):
                         y_hat, loss = mdl(eeg)
 
                         # Calculates Pearson's coef. for the matching distribution and for the null one
-                        nd_acc = correlation(torch.roll(stima, time_shift), y_hat, batch_dim=unit_output)
-                        acc = correlation(stima, y_hat, batch_dim=unit_output)
+                        nd_loss = get_loss(torch.roll(stima, time_shift), y_hat, window_pred=window_pred)
 
                         if dec_acc:
                             stimb = data['stimb'].to(device, dtype=torch.float)
-                            unat_acc = correlation(stimb, y_hat, batch_dim=unit_output)
+                            unat_loss = get_loss(stimb, y_hat, window_pred=window_pred)
                             # Decoding accuracy
-                            if acc.item() > unat_acc.item():
+                            if loss.item() > unat_loss.item():
                                 att_corr += 1
 
-                        corr.append(acc.item())
-                        nd_corr.append(nd_acc.item())
+                        corr.append(loss.item())
+                        nd_corr.append(nd_loss.item())
 
                 eval_results[subj] = corr
                 nd_results[subj] = nd_corr

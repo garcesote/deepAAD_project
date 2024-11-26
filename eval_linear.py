@@ -19,8 +19,7 @@ def main(
     # Data path parameters
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    mdl_save_path = global_path + '/results/'+key+'/models'
-    project = 'gradient_tracking'
+    project = 'spatial_audio'
 
     for run in config['runs']:
 
@@ -30,6 +29,7 @@ def main(
         dataset_params = run['dataset_params']
         fixed = dataset_params['fixed']
         rnd_trials = dataset_params['rnd_trials']
+        hrtf = dataset_params['hrtf'] if 'hrtf' in dataset_params.keys() else False
         preproc_mode = dataset_params['preproc_mode'] if 'preproc_mode' in dataset_params.keys() else None
         data_type = dataset_params['data_type'] if 'data_type' in dataset_params.keys() else 'mat'
         eeg_band = dataset_params['eeg_band'] if 'eeg_band' in dataset_params.keys() else None
@@ -53,17 +53,15 @@ def main(
             if 'tol' in model_params.keys(): model += ('_tol=' + str(model_params['tol']))
         else: raise ValueError("Introduce a valid linear model name between 'Ridge' and 'CCA'")
 
-        if preproc_mode is not None:
-            model = model + '_' + preproc_mode
-        if eeg_band is not None:
-            model = model + '_' + eeg_band
-        if rnd_trials:
-            model = model + '_rnd'
+        if preproc_mode is not None: model += '_' + preproc_mode
+        if eeg_band is not None: model += '_' + eeg_band
+        if rnd_trials: model += '_rnd'
+        if hrtf: model += '_hrtf'
 
         # DEFINE THE SAVE PATH
         dst_save_path = os.path.join(global_path, 'results', key, 'eval_metrics', dataset_name+'_data', model)
         decAcc_save_path = os.path.join(global_path, 'results', key, 'decode_accuracy', dataset_name+'_data', model)
-        mdl_load_folder = os.path.join(global_path, 'results', key, 'models', dataset+'_data')
+        mdl_load_path = os.path.join(global_path, 'results', project, key, 'models', dataset+'_data', model)
         
         exp_name = ('_').join([key, dataset_name, model])
         if wandb_upload: wandb.init(project=project, name=exp_name, tags=['evaluation_ridge'], config=run)
@@ -85,7 +83,6 @@ def main(
                 print(f'Evaluating {linear_model} on window {window//64}s with {dataset_name} dataset for subj {subj}')
 
                 # GET THE MODEL PATH
-                mdl_load_path = os.path.join(mdl_load_folder, model)
                 if key == 'population':
                     mdl_filename = os.listdir(mdl_load_path)[0]
                 else:
