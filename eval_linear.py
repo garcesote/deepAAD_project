@@ -8,6 +8,7 @@ import json
 import argparse
 import wandb
 import yaml
+import sys
 
 def main(
         config,
@@ -36,7 +37,8 @@ def main(
     
         data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
 
-        window_list = [64, 128, 320, 640, 1600]
+        window_list = [64, 128, 320, 640, 1280, 2560]
+        # window_list = [64, 2560]
         time_shift = 100 # Null distribution
         leave_one_out = True if key == 'subj_independent' else False # Attention! This parameter change the whole sim. (read doc)
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
@@ -59,13 +61,15 @@ def main(
         if hrtf: model += '_hrtf'
 
         # DEFINE THE SAVE PATH
-        dst_save_path = os.path.join(global_path, 'results', key, 'eval_metrics', dataset_name+'_data', model)
-        decAcc_save_path = os.path.join(global_path, 'results', key, 'decode_accuracy', dataset_name+'_data', model)
+        dst_save_path = os.path.join(global_path, 'results', project, key, 'eval_metrics', dataset_name+'_data', model)
+        decAcc_save_path = os.path.join(global_path, 'results', project, key, 'decode_accuracy', dataset_name+'_data', model)
         mdl_load_path = os.path.join(global_path, 'results', project, key, 'models', dataset+'_data', model)
         
         exp_name = ('_').join([key, dataset_name, model])
         if wandb_upload: wandb.init(project=project, name=exp_name, tags=['evaluation_ridge'], config=run)
 
+        window_accuracies = {win//64: None for win in window_list}
+        
         for window in window_list:
 
             block_size = window
@@ -93,20 +97,20 @@ def main(
 
                 # LOAD THE DATA
                 test_set = CustomDataset(dataset, data_path, 'test', subj, window=block_size, hop=block_size, data_type=data_type,
-                                        leave_one_out=leave_one_out, fixed=fixed, rnd_trials=rnd_trials, eeg_band = eeg_band)
+                                        leave_one_out=leave_one_out, fixed=fixed, rnd_trials=rnd_trials, hrtf=hrtf, eeg_band = eeg_band)
                 test_eeg, test_stima, test_stimb = test_set.eeg, test_set.stima, test_set.stimb
                 test_stim_nd = torch.roll(test_stima.clone().detach(), time_shift)
 
                 if linear_model == "Ridge":
 
                     # EVALUATE WITH THE BEST ALPHA OBTAINED
-                    scores_a = mdl.score_in_batches(test_eeg.T, test_stima[:, np.newaxis], batch_size=block_size)
-                    scores_nd = mdl.score_in_batches(test_eeg.T, test_stim_nd[:, np.newaxis], batch_size=block_size) # ya selecciona el best alpha solo
+                    scores_a = mdl.score_in_batches(test_eeg.T, test_stima.T, batch_size=block_size)
+                    scores_nd = mdl.score_in_batches(test_eeg.T, test_stim_nd.T, batch_size=block_size) # ya selecciona el best alpha solo
 
                     # DECODING ACCURACY
                     att_corr = 0
                     if dec_acc:
-                        scores_b = mdl.score_in_batches(test_eeg.T, test_stimb[:, np.newaxis], batch_size=block_size)
+                        scores_b = mdl.score_in_batches(test_eeg.T, test_stimb.T, batch_size=block_size)
                         for score_a, score_b in zip(scores_a, scores_b):
                             if score_a > score_b:
                                 att_corr += 1
@@ -134,6 +138,9 @@ def main(
             if wandb_upload:
                     wandb.log({'window': block_size, 'corr_subj_mean': np.mean(eval_mean_results), 'corr_subj_std': np.std(eval_mean_results), 'decAcc_subj_mean': np.mean(dec_results), 'decAcc_subj_std': np.std(dec_results)})
 
+            # Save the window results to compute mesd
+            window_accuracies[window//64] = dec_results
+
             str_win = str(block_size//64)+'s'
 
             # SAVE RESULTS
@@ -150,8 +157,25 @@ def main(
             filename = str_win+'_accuracies'
             json.dump(dec_results, open(os.path.join(decAcc_save_path, filename),'w'))
         
+        # COMPUTE MESD (default values)
+        print('Computing MESD')
+        mesd_dict = {'mesd': [], 'N_mesd': [], 'tau_mesd': [], 'p_mesd': []}
+        for subj in range(len(selected_subjects)):
+            tau = np.array(list(window_accuracies.keys()))
+            p = np.array([results[subj] / 100 for results in window_accuracies.values()])
+            mesd, N_mesd, tau_mesd, p_mesd = compute_MESD(tau,p)
+            print(f"For subject {subj} the minimal expected switch duration is MESD = {mesd} \nat an otpimal working point of (tau, p) = ({tau_mesd}, {p_mesd}) \nwith N = {N_mesd} states in the Markov chain.")
+            mesd_results = [mesd, N_mesd, tau_mesd, p_mesd]
+            for idx, value in zip(list(mesd_dict.keys()), mesd_results):
+                mesd_dict[idx].append(value)
+            # Wandb upload with the specific info of the specific subject
+            upload_data = {idx: value[subj] for idx, value in mesd_dict.items()}
+            upload_data['subject'] = subj
+            if wandb_upload: wandb.log(upload_data)
+        if wandb_upload: wandb.log({'mesd_mean': np.mean(mesd_dict['mesd']), 'mesd_median': np.median(mesd_dict['mesd'])})
+        json.dump(mesd_dict, open(os.path.join(decAcc_save_path, 'mesd'),'w'))
+
         if wandb_upload: wandb.finish()
-            
 
 if __name__ == "__main__":
 
@@ -160,7 +184,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Definir los argumentos que quieres aceptar
-    parser.add_argument("--config", type=str, default='configs/linear_models/cca_tunning.yaml')
+    parser.add_argument("--config", type=str, default='configs/spatial_audio/eval_mesd_linear.yaml')
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
@@ -168,6 +192,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     wandb_upload = args.wandb
+
+    # Introduce path to the mesd-toolbox
+    sys.path.append(r"C:\Users\jaulab\Desktop\AAD\mesd-toolbox\mesd-toolbox-python")
+    from mesd_toolbox import compute_MESD
     
     # Upload results to wandb
     if wandb_upload:

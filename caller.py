@@ -76,20 +76,40 @@ def run_experiment(dataset, key, train=True, eval=True, train_ridge=True, eval_r
 #     subprocess.run(cmd)
 
 # cmd = [
-#     "py", "train_models.py", 
-#     "--config", "configs/gradient_tracking/window_output.yaml",
+#     "py", "evaluate.py", 
+#     "--config", "configs/spatial_audio/eval_mesd_dnn.yaml",
 #     "--key", 'population',
-#     "--dataset", 'skl',
+#     "--dataset", 'fulsang',
+#     "--wandb"
+# ]  
+# print(cmd)
+# subprocess.run(cmd)
+
+# cmd = [
+#     "py", "evaluate.py", 
+#     "--config", "configs/spatial_audio/dnn_models.yaml",
+#     "--key", 'population',
+#     "--dataset", 'fulsang',
 #     "--wandb"
 # ]  
 # print(cmd)
 # subprocess.run(cmd)
 
 cmd = [
-    "py", "evaluate.py", 
-    "--config", "configs/gradient_tracking/window_output.yaml",
-    "--key", 'population',
-    "--dataset", 'skl',
+    "py", "eval_linear.py", 
+    "--config", "configs/spatial_audio/eval_mesd_linear.yaml",
+    "--key", 'subj_specific',
+    "--dataset", 'fulsang',
+    "--wandb"
+]  
+print(cmd)
+subprocess.run(cmd)
+
+cmd = [
+    "py", "eval_linear.py", 
+    "--config", "configs/spatial_audio/linear_models.yaml",
+    "--key", 'subj_specific',
+    "--dataset", 'fulsang',
     "--wandb"
 ]  
 print(cmd)

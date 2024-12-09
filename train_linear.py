@@ -44,8 +44,6 @@ def main(
             selected_subj = [get_subjects(dataset)]
         else:
             selected_subj = get_subjects(dataset)
-        
-        # if n==0: selected_subj = selected_subj[17:]
 
         for subj in selected_subj:
             
@@ -72,10 +70,10 @@ def main(
                 mdl = Ridge(**model_params)
 
                 # TRAIN MODEL
-                mdl.fit(train_set.eeg.T, train_set.stima[:, np.newaxis])
+                mdl.fit(train_set.eeg.T, train_set.stima.T)
                 
                 # VALIDATE AND SELECT BEST ALPHA
-                scores = mdl.model_selection(val_set.eeg.T, val_set.stima[:, np.newaxis])
+                scores = mdl.model_selection(val_set.eeg.T, val_set.stima.T)
                 best_alpha = mdl.best_alpha_idx
 
                 model_name = f"{linear_model}_start={model_params['start_lag']}_end={model_params['end_lag']}"
@@ -109,12 +107,10 @@ def main(
             else: raise ValueError('Introduce a valid lineal model between Ridge or CCA')
 
             # Add extensions to the model name depending on the dataset params
-            if preproc_mode is not None:
-                model_name = model_name + '_' + preproc_mode
-            if eeg_band is not None:
-                model_name = model_name + '_' + eeg_band
-            if rnd_trials:
-                model_name = model_name + '_rnd'
+            if preproc_mode is not None: model_name += '_' + preproc_mode
+            if eeg_band is not None: model_name += '_' + eeg_band
+            if rnd_trials: model_name += '_rnd'
+            if hrtf: model_name += '_hrtf'
 
             dataset_filename = dataset+'_fixed' if fixed and dataset == 'jaulab' else dataset
             

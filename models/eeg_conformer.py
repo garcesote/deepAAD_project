@@ -31,10 +31,9 @@ class PatchEmbedding(nn.Module):
             nn.ELU(),
             nn.AvgPool2d((1, config.pool), (1, config.pool_hop)), # pooling acts as slicing to obtain 'patch' along the time dimension as in ViT
             nn.Dropout(config.dropout),
-        ]
-        )
+        ])
 
-        self.projection = nn.Conv2d(config.n_embd, config.n_embd, (1, 1), stride=(1, 1))  # transpose, conv could enhance fiting ability slightly
+        self.projection = nn.Conv2d(config.n_embd, config.n_embd, (1, 1), stride=(1, 1))  # transpose, conv could enhance fitting ability slightly
 
 
     def forward(self, x: Tensor) -> Tensor:
@@ -285,9 +284,9 @@ class Conformer(nn.Sequential):
         # Classification module to extract the single estimation
         feat_vector, preds = self.classif(x) 
 
-        # Squeeze the output in order to calculate the loss ehwn predicting unit output
-        if preds.shape[-1] == 1:
-            preds = torch.squeeze(preds)
+        # # Squeeze the output in order to calculate the loss when predicting unit output
+        # if preds.shape[-1] == 1:
+        #     preds = torch.squeeze(preds)
 
         if targets is not None:
             loss = get_loss(preds, targets, window_pred=self.window_pred)

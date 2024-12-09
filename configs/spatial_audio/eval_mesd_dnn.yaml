@@ -3,7 +3,7 @@ global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
 # global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
 # global_data_path: 'D:\igarcia\AAD_Data'
 
-exp_name: 'binaural_hrtfs'
+exp_name: 'single_chan'
 
 runs: # All models trained with window size of 5s
 
@@ -21,13 +21,11 @@ runs: # All models trained with window size of 5s
       filt: False       
       fixed: False      
       rnd_trials: False   
-      window_pred: False
-      hrtf: True
+      unit_output: True
     model_params:
       n_hidden: 3
       dropout: 0.45
       n_samples: 50
-      output_dim: 2
 
   - model: 'CNN'
     train_params:
@@ -43,8 +41,7 @@ runs: # All models trained with window size of 5s
       filt: False       
       fixed: False      
       rnd_trials: False   
-      window_pred: False
-      hrtf: True
+      unit_output: True
     model_params:
       F1: 8
       D: 8
@@ -53,8 +50,7 @@ runs: # All models trained with window size of 5s
       AP2: 4
       dropout: 0.2
       input_samples: 50
-      output_dim: 2
-
+  
   - model: 'Conformer'
     train_params:
       batch_size: 128              
@@ -69,8 +65,7 @@ runs: # All models trained with window size of 5s
       filt: False       
       fixed: False      
       rnd_trials: False   
-      window_pred: False
-      hrtf: True
+      unit_output: True
     model_params:
       mlp_ratio: 2
       enc_layers: 2
@@ -83,4 +78,3 @@ runs: # All models trained with window size of 5s
       dropout: 0.4
       classifier: True
       bias: True
-      output_dim: 2

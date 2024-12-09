@@ -134,7 +134,7 @@ def get_loss(x: torch.tensor, y: torch.tensor, eps=1e-8, window_pred=False, mode
     corr = torch.zeros((n_stim, ))
     for chan, (pred, target) in enumerate(zip(x, y)):
         vx = pred - torch.mean(pred)
-        vy = target - torch.mean(pred)
+        vy = target - torch.mean(target)
         corr[chan] = torch.sum(vx * vy) / (torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)) + eps)
 
     if mode == 'mean':

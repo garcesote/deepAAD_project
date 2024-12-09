@@ -18,7 +18,6 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
     global_path = config['global_path']
     global_data_path = config['global_data_path']
     project = 'spatial_audio'
-    exp_name = config['exp_name'] + '_' + dataset
     config['dataset'] = dataset
     config['key'] = key
 
@@ -33,6 +32,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
 
         # Global params
         model = run['model']
+        exp_name = config['exp_name'] + '_' + model
         # exp_name = ('_').join([key, dataset, model])
 
         # Config training
@@ -55,7 +55,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
         fixed = ds_config['fixed']
         rnd_trials = ds_config['rnd_trials']
-        hrtf = ds_config['hrtf']
+        hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
         window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
         val_hop = ds_config['hop'] if window_pred else 1
@@ -218,12 +218,10 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                 prefix = model if key == 'population' else subj
 
                 # Add extensions to the model name depending on the params
-                if 'preproc_mode' in ds_config.keys():
-                    mdl_name = mdl_name + '_' + preproc_mode
-                if eeg_band is not None:
-                    mdl_name = mdl_name + '_' + eeg_band
-                if rnd_trials:
-                    mdl_name = mdl_name + '_rnd'
+                if preproc_mode is not None: mdl_name += '_' + preproc_mode
+                if eeg_band is not None: mdl_name += '_' + eeg_band
+                if rnd_trials: mdl_name += '_rnd'
+                if hrtf: mdl_name += '_hrtf'
             
                 mdl_folder = os.path.join(mdl_save_path, dataset_filename+'_data', mdl_name)
                 if not os.path.exists(mdl_folder):
@@ -253,7 +251,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/spatial_audio/dnn_models.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/spatial_audio/eval_mesd_dnn.yaml", help="Ruta al archivo config")
     # parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")

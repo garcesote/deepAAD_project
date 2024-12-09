@@ -141,7 +141,7 @@ class CCA_AAD:
             
             # Compute the lagged matrix
             eeg_win = eeg[:, n*batch_size:(n+1)*batch_size]
-            stim_win = stim[n*batch_size:(n+1)*batch_size]
+            stim_win = stim[:, n*batch_size:(n+1)*batch_size]
 
             # Obtain the projected vectors
             eeg_proj, stim_proj = self.transform(eeg_win, stim_win)

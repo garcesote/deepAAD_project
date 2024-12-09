@@ -12,13 +12,15 @@ import yaml
 import os
 import json
 import wandb
+import sys
 
 def main(config, wandb_upload, dataset, key):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'gradient_tracking'
-    window_list = [64, 128, 320, 640, 1600]
+    project = 'spatial_audio'
+    window_list = [64, 128, 320, 640, 1280, 2560] # 1s, 2s, 5s, 10s, 20s, 40s
+    # window_list = [64, 640, 2560]
     exp_name = config['exp_name'] + '_' + dataset
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
@@ -31,11 +33,12 @@ def main(config, wandb_upload, dataset, key):
 
         # Global params
         model = run['model']
-        # exp_name = ('_').join([key, dataset, model])
 
         mdl_save_path = os.path.join(global_path, 'results', project, key, 'models')
 
         if wandb_upload: wandb.init(project=project, name=exp_name, tags=['evaluation'], config=run)
+
+        window_accuracies = {win//64: None for win in window_list}
 
         for eval_window in window_list:
 
@@ -53,11 +56,10 @@ def main(config, wandb_upload, dataset, key):
             eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
             fixed = ds_config['fixed']
             rnd_trials = ds_config['rnd_trials']
-            hrtf = ds_config['hrtf']
+            hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
             time_shift = 100
             dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
             batch_size =  eval_window if not window_pred else 1
-
             lr = float(train_params['lr'])
 
             if fixed: assert(dataset=='jaulab') # Only fixed subject for jaulab dataset
@@ -69,16 +71,14 @@ def main(config, wandb_upload, dataset, key):
             mdl_name = f'{model}_batch={train_params["batch_size"]}_block={ds_config["window_len"]}_lr={lr}'
 
             # Add extensions to the model name depending on the params
-            if 'preproc_mode' in ds_config.keys():
-                mdl_name = mdl_name + '_' + preproc_mode
-            if eeg_band is not None:
-                mdl_name = mdl_name + '_' + eeg_band
-            if rnd_trials:
-                mdl_name = mdl_name + '_rnd'
+            if preproc_mode is not None: mdl_name += '_' + preproc_mode
+            if eeg_band is not None: mdl_name += '_' + eeg_band
+            if rnd_trials: mdl_name += '_rnd'
+            if hrtf: mdl_name += '_hrtf'
 
             # DEFINE THE SAVE PATH
-            dst_save_path = os.path.join(global_path, 'results', exp_name, key, 'eval_metrics', dataset_name+'_data', model)
-            decAcc_save_path = os.path.join(global_path, 'results', exp_name, key, 'decode_accuracy', dataset_name+'_data', model)
+            dst_save_path = os.path.join(global_path, 'results', project, key, 'eval_metrics', dataset_name+'_data', model)
+            decAcc_save_path = os.path.join(global_path, 'results', project, key, 'decode_accuracy', dataset_name+'_data', model)
 
             eval_results = {}
             nd_results = {} # construct a null distribution when evaluating
@@ -114,7 +114,7 @@ def main(config, wandb_upload, dataset, key):
                     mdl = Conformer(mdl_config)
                 else:
                     raise ValueError('Introduce a valid model')
-            
+
                 mdl.load_state_dict(torch.load(os.path.join(mdl_folder, mdl_filename), map_location=torch.device(device)))
                 mdl.to(device)
 
@@ -134,7 +134,7 @@ def main(config, wandb_upload, dataset, key):
                         eeg = data['eeg'].to(device, dtype=torch.float)
                         stima = data['stima'].to(device, dtype=torch.float)
                         
-                        y_hat, loss = mdl(eeg)
+                        y_hat, loss = mdl(eeg, targets=stima)
 
                         # Calculates Pearson's coef. for the matching distribution and for the null one
                         nd_loss = get_loss(torch.roll(stima, time_shift), y_hat, window_pred=window_pred)
@@ -143,11 +143,11 @@ def main(config, wandb_upload, dataset, key):
                             stimb = data['stimb'].to(device, dtype=torch.float)
                             unat_loss = get_loss(stimb, y_hat, window_pred=window_pred)
                             # Decoding accuracy
-                            if loss.item() > unat_loss.item():
+                            if loss.item() < unat_loss.item():
                                 att_corr += 1
 
-                        corr.append(loss.item())
-                        nd_corr.append(nd_loss.item())
+                        corr.append(-loss.item())
+                        nd_corr.append(-nd_loss.item())
 
                 eval_results[subj] = corr
                 nd_results[subj] = nd_corr
@@ -160,8 +160,11 @@ def main(config, wandb_upload, dataset, key):
             if wandb_upload:
                 wandb.log({'window': eval_window, 'corr_subj_mean': np.mean(eval_mean_results), 'corr_subj_std': np.std(eval_mean_results), 'decAcc_subj_mean': np.mean(dec_results), 'decAcc_subj_std': np.std(dec_results)})
 
-            str_win = str(eval_window//64)+'s' if 'VLAAI' in model else str(batch_size//64)+'s'
+            # Save the window results to compute mesd
+            window_accuracies[eval_window//64] = dec_results
 
+            str_win = str(eval_window//64)+'s' if 'VLAAI' in model else str(batch_size//64)+'s'
+            
             # SAVE RESULTS
             if not os.path.exists(dst_save_path):
                 os.makedirs(dst_save_path)
@@ -176,6 +179,24 @@ def main(config, wandb_upload, dataset, key):
             filename = str_win+'_accuracies'
             json.dump(dec_results, open(os.path.join(decAcc_save_path, filename),'w'))
 
+        # COMPUTE MESD (default values)
+        print('Computing MESD')
+        mesd_dict = {'mesd': [], 'N_mesd': [], 'tau_mesd': [], 'p_mesd': []}
+        for subj in range(len(selected_subjects)):
+            tau = np.array(list(window_accuracies.keys()))
+            p = np.array([results[subj] / 100 for results in window_accuracies.values()])
+            mesd, N_mesd, tau_mesd, p_mesd = compute_MESD(tau,p)
+            print(f"For subject {subj} the minimal expected switch duration is MESD = {mesd} \nat an otpimal working point of (tau, p) = ({tau_mesd}, {p_mesd}) \nwith N = {N_mesd} states in the Markov chain.")
+            mesd_results = [mesd, N_mesd, tau_mesd, p_mesd]
+            for idx, value in zip(list(mesd_dict.keys()), mesd_results):
+                mesd_dict[idx].append(value)
+            # Wandb upload with the specific info of the specific subject
+            upload_data = {idx: value[subj] for idx, value in mesd_dict.items()}
+            upload_data['subject'] = subj
+            if wandb_upload: wandb.log(upload_data)
+        if wandb_upload: wandb.log({'mesd_mean': np.mean(mesd_dict['mesd']), 'mesd_median': np.median(mesd_dict['mesd'])})
+        json.dump(mesd_dict, open(os.path.join(decAcc_save_path, 'mesd'),'w'))
+
         if wandb_upload: wandb.finish()
 
 if __name__ == "__main__":
@@ -185,7 +206,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/gradient_tracking/band_analysis.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/spatial_audio/eval_mesd_dnn.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
@@ -193,6 +214,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     wandb_upload = args.wandb
+
+    # Introduce path to the mesd-toolbox
+    sys.path.append(r"C:\Users\jaulab\Desktop\AAD\mesd-toolbox\mesd-toolbox-python")
+    from mesd_toolbox import compute_MESD
     
     # Upload results to wandb
     if wandb_upload:
