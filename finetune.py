@@ -1,40 +1,45 @@
 import torch
+from utils.functional import set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
+from utils.datasets import CustomDataset
+from utils.loss_functions import CustomLoss
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from models.dnn import FCNN, CNN
 from models.vlaai import VLAAI
 from models.eeg_conformer import Conformer, ConformerConfig
-from utils.functional import get_data_path, get_channels, get_subjects, set_seeds, get_loss
-from utils.datasets import CustomDataset
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+import numpy as np
 from tqdm import tqdm
-from utils.loss_functions import CustomLoss
 import argparse
 import yaml
 import os
 import json
 import wandb
+import sys
 
-def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_stop):
+def main(config, wandb_upload, dataset, early_stop, lr_decay=0.5):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
     project = 'spatial_audio'
-    config['dataset'] = dataset
-    config['key'] = key
-
+    key = 'population'
+    
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
         set_seeds(config['seed'])
         exp_name =  exp_name + '_' + config['seed']
     else: 
         set_seeds() # default seed = 42
-
+    
     for run in config['runs']:
 
         # Global params
         model = run['model']
         exp_name = config['exp_name'] + '_' + model
-        # exp_name = ('_').join([key, dataset, model])
+        mdl_load_path = os.path.join(global_path, 'results', project, key, 'models')
+
+        # Load config
+        ds_config = run['dataset_params']
+        train_params = run['train_params']
 
         # Config training
         train_params = run['train_params']
@@ -46,7 +51,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         early_stopping_patience = train_params['early_stopping_patience'] if early_stop else max_epoch
         loss_mode = train_params['loss_mode'] if 'loss_mode' in train_params.keys() else 'mean'
         alpha = train_params['alpha_loss'] if 'alpha_loss' in train_params.keys() else 0
-
+        
         # Config dataset
         ds_config = run['dataset_params']
         preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else None
@@ -64,28 +69,37 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         val_hop = ds_config['hop'] if window_pred else 1
 
         # Saving paths
-        mdl_save_path = os.path.join(global_path, 'results', project, key, 'models')
-        metrics_save_path = os.path.join(global_path, 'results', project, key, 'metrics')
+        mdl_save_path = os.path.join(global_path, 'results', project, key, 'finetune_models')
+        metrics_save_path = os.path.join(global_path, 'results', project, key, 'finetune_metrics')
 
+        if fixed: assert(dataset=='jaulab') # Only fixed subject for jaulab dataset
+        dataset_name = dataset+'_fixed' if fixed else dataset
+
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        # GET THE MODEL PATH
+        mdl_name = f'{model}_batch={train_params["batch_size"]}_block={ds_config["window_len"]}_lr={lr}'
+
+        # Add extensions to the model name depending on the params
+        if preproc_mode is not None: mdl_name += '_' + preproc_mode
+        if eeg_band is not None: mdl_name += '_' + eeg_band
+        if rnd_trials: mdl_name += '_rnd'
+        if hrtf: mdl_name += '_hrtf'
+        
         # Population mode that generates a model for all samples
-        if key == 'population':
-            selected_subj = [get_subjects(dataset)]
-        else:
-            selected_subj = get_subjects(dataset)
+        # if key == 'population':
+        #     selected_subj = [get_subjects(dataset)]
+        # else:
+        #     selected_subj = get_subjects(dataset)
+        selected_subj = get_subjects(dataset)
 
         for subj in selected_subj:
-            
-            if key == 'population':
-                print(f'Training {model} on all subjects with {dataset} data...')
-            else:
-                run['subj'] = subj
-                if key == 'subj_independent':
-                    print(f'Training {model} leaving out {subj} with {dataset} data...')
-                else:
-                    print(f'Training {model} on {subj} with {dataset} data...')
-            
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+            print(f'Finetunning {model} on {subj} with {dataset} data...')
+            
+            mdl_folder = os.path.join(mdl_load_path, dataset_name+'_data', mdl_name)
+            mdl_filename = os.listdir(mdl_folder)[0] # only a single trained model for finetunning
+            
             # LOAD THE MODEL
             if model == 'FCNN':
                 run['model_params']['n_chan'] = get_channels(dataset)
@@ -97,37 +111,33 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                 run['model_params']['input_channels'] = get_channels(dataset)
                 mdl = VLAAI(**run['model_params'])
             elif model == 'Conformer':
-                run['model_params']['eeg_channels'] = get_channels(dataset)
                 run['model_params']['kernel_chan'] = get_channels(dataset)
+                run['model_params']['eeg_channels'] = get_channels(dataset)
                 mdl_config = ConformerConfig(**run['model_params'])
                 mdl = Conformer(mdl_config)
             else:
                 raise ValueError('Introduce a valid model')
-            
+
+            mdl.load_state_dict(torch.load(os.path.join(mdl_folder, mdl_filename), map_location=torch.device(device)))
             mdl.to(device)
+            mdl.finetune()
             mdl_size = sum(p.numel() for p in mdl.parameters())
             run['mdl_size'] = mdl_size
-            run['subject'] = subj
-            print(f'Model size: {mdl_size / 1e06:.2f}M')
+            run['subj'] = subj
 
-            # WEIGHT INITILAIZATION
-            if exp_name == 'bool_params':
-                if train_params['init_weights']: mdl.apply(mdl.init_weights)
-    
-            if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
-            if gradient_tracking and wandb_upload: wandb.watch(models=mdl, log='all')
+            if wandb_upload: wandb.init(project=project, name=exp_name, tags=['finetune'], config=run)
 
             # LOAD THE DATA
             train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, data_type=data_type, leave_one_out=leave_one_out,  
-                                       fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band=eeg_band)
+                                    fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band=eeg_band)
             val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=val_hop, data_type=data_type, leave_one_out=leave_one_out, 
                                     fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band = eeg_band)
             
             train_loader = DataLoader(train_set, batch_size, shuffle=True, pin_memory=True)
             val_loader = DataLoader(val_set, batch_size, shuffle= window_pred, pin_memory=True)
             
-            # OPTIMIZER PARAMS
-            optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
+            # OPTIMIZER PARAMS: optimize only parameters which contains grad
+            optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, mdl.parameters()), lr= lr * lr_decay, weight_decay=weight_decay)
             scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience, verbose=True)
 
             # LOSS FUNCTION
@@ -141,7 +151,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
             val_mean_loss = []
             val_decAccuracies = []
 
-            # Training loop
+            # FINETUNE THE MODEL
             for epoch in range(max_epoch):
                 
                 # Stop after n epoch without imporving the val loss
@@ -225,54 +235,51 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
             
             dataset_filename = dataset+'_fixed' if fixed and dataset == 'jaulab' else dataset
 
-            if not tunning:
+            # Save best final model
+            mdl_name = f'{model}_batch={batch_size}_block={window_len}_lr={lr}'
+            # prefix = model if key == 'population' else subj
+            prefix = subj
 
-                # Save best final model
-                mdl_name = f'{model}_batch={batch_size}_block={window_len}_lr={lr}'
-                prefix = model if key == 'population' else subj
+            # Add extensions to the model name depending on the params
+            if preproc_mode is not None: mdl_name += '_' + preproc_mode
+            if eeg_band is not None: mdl_name += '_' + eeg_band
+            if rnd_trials: mdl_name += '_rnd'
+            if hrtf: mdl_name += '_hrtf'
+        
+            mdl_folder = os.path.join(mdl_save_path, dataset_filename+'_data', mdl_name)
+            if not os.path.exists(mdl_folder):
+                os.makedirs(mdl_folder)
+            torch.save(
+                best_state_dict, 
+                os.path.join(mdl_folder, f'{prefix}_epoch={epoch}_acc={best_accuracy:.4f}.ckpt')
+            )
 
-                # Add extensions to the model name depending on the params
-                if preproc_mode is not None: mdl_name += '_' + preproc_mode
-                if eeg_band is not None: mdl_name += '_' + eeg_band
-                if rnd_trials: mdl_name += '_rnd'
-                if hrtf: mdl_name += '_hrtf'
-            
-                mdl_folder = os.path.join(mdl_save_path, dataset_filename+'_data', mdl_name)
-                if not os.path.exists(mdl_folder):
-                    os.makedirs(mdl_folder)
-                torch.save(
-                    best_state_dict, 
-                    os.path.join(mdl_folder, f'{prefix}_epoch={epoch}_acc={best_accuracy:.4f}.ckpt')
-                )
-
-                # Save corresponding train and val metrics
-                val_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'val')
-                if not os.path.exists(val_folder):
-                    os.makedirs(val_folder)
-                train_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'train')
-                if not os.path.exists(train_folder):
-                    os.makedirs(train_folder)
-                json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-                json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-                json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+            # Save corresponding train and val metrics
+            val_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'val')
+            if not os.path.exists(val_folder):
+                os.makedirs(val_folder)
+            train_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'train')
+            if not os.path.exists(train_folder):
+                os.makedirs(train_folder)
+            json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+            json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+            json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
 
             if wandb_upload: wandb.finish()
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="Training script")
+    parser = argparse.ArgumentParser(description="Evaluate script")
     n_threads = 20
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/spatial_audio/eval_mesd_dnn.yaml", help="Ruta al archivo config")
-    # parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/spatial_audio/dnn_models.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
-    parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
-    parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
-    parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--lr_decay", type=float, default=20, help="Scaling factor for the lr finetunning")
+    parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     
     args = parser.parse_args()
 
@@ -282,9 +289,11 @@ if __name__ == "__main__":
     if wandb_upload:
         wandb.login()
 
+    assert args.lr_decay < 100 and args.lr_decay > 0, 'lr decay must be a float numbet between 0 and 1'
+
     # Load corresponding config
     with open(args.config, 'r') as archivo:
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, args.key, args.tunning, args.gradient_tracking, not args.max_epoch)
+    main(config, wandb_upload, args.dataset, not args.max_epoch, args.lr_decay)

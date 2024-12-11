@@ -1,6 +1,7 @@
 import torch
 from utils.functional import set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
 from utils.datasets import CustomDataset
+from utils.loss_functions import CustomLoss
 from torch.utils.data import DataLoader
 from models.dnn import FCNN, CNN
 from models.vlaai import VLAAI
@@ -14,29 +15,38 @@ import json
 import wandb
 import sys
 
-def main(config, wandb_upload, dataset, key):
+def main(config, wandb_upload, dataset, key, finetuned):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
     project = 'spatial_audio'
-    window_list = [64, 128, 320, 640, 1280, 2560] # 1s, 2s, 5s, 10s, 20s, 40s
-    # window_list = [64, 640, 2560]
-    exp_name = config['exp_name'] + '_' + dataset
+    # window_list = [64, 128, 320, 640, 1280, 2560] # 1s, 2s, 5s, 10s, 20s, 40s
+    window_list = [64, 128, 320, 640, 1600, 3200] # 1s, 2s, 5s, 10s, 25s, 50s
+    # window_list = [3200]
+    
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
         set_seeds(config['seed'])
         exp_name =  exp_name + '_' + config['seed']
     else: 
         set_seeds() # default seed = 42
+
+    finetuned=True
     
     for run in config['runs']:
 
         # Global params
         model = run['model']
+        exp_name = config['exp_name'] + '_' + model
 
-        mdl_save_path = os.path.join(global_path, 'results', project, key, 'models')
+        if finetuned: key = 'population'
+        mdl_load_folder = 'finetune_models' if finetuned else 'models'
 
-        if wandb_upload: wandb.init(project=project, name=exp_name, tags=['evaluation'], config=run)
+        mdl_load_path = os.path.join(global_path, 'results', project, key, mdl_load_folder)
+
+        tag = 'evaluation_finetune' if finetuned else 'evaluation'
+
+        if wandb_upload: wandb.init(project=project, name=exp_name, tags=tag, config=run)
 
         window_accuracies = {win//64: None for win in window_list}
 
@@ -61,6 +71,8 @@ def main(config, wandb_upload, dataset, key):
             dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
             batch_size =  eval_window if not window_pred else 1
             lr = float(train_params['lr'])
+            loss_mode = train_params['loss_mode'] if 'loss_mode' in train_params.keys() else 'mean'
+            alpha = train_params['alpha_loss'] if 'alpha_loss' in train_params.keys() else 0
 
             if fixed: assert(dataset=='jaulab') # Only fixed subject for jaulab dataset
             dataset_name = dataset+'_fixed' if fixed else dataset
@@ -76,9 +88,14 @@ def main(config, wandb_upload, dataset, key):
             if rnd_trials: mdl_name += '_rnd'
             if hrtf: mdl_name += '_hrtf'
 
+            if finetuned:
+                eval_path, dec_path = 'eval_finetuned_metrics', 'decode_finetuned_accuracy'  
+            else:
+                eval_path, dec_path = 'eval_metrics', 'decode_accuracy'
+
             # DEFINE THE SAVE PATH
-            dst_save_path = os.path.join(global_path, 'results', project, key, 'eval_metrics', dataset_name+'_data', model)
-            decAcc_save_path = os.path.join(global_path, 'results', project, key, 'decode_accuracy', dataset_name+'_data', model)
+            dst_save_path = os.path.join(global_path, 'results', project, key, eval_path, dataset_name+'_data', mdl_name)
+            decAcc_save_path = os.path.join(global_path, 'results', project, key, dec_path, dataset_name+'_data', mdl_name)
 
             eval_results = {}
             nd_results = {} # construct a null distribution when evaluating
@@ -91,8 +108,8 @@ def main(config, wandb_upload, dataset, key):
 
                 print(f'Evaluating {model} on window {eval_window//64}s with {dataset_name} dataset for subj {subj}')
             
-                mdl_folder = os.path.join(mdl_save_path, dataset_name+'_data', mdl_name)
-                if key == 'population':
+                mdl_folder = os.path.join(mdl_load_path, dataset_name+'_data', mdl_name)
+                if key == 'population' and not finetuned:
                     mdl_filename = os.listdir(mdl_folder)[0] # only a single trained model
                 else:
                     mdl_filename = get_filename(mdl_folder, subj) # search for the model related with the subj
@@ -123,6 +140,9 @@ def main(config, wandb_upload, dataset, key):
                                         fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band=eeg_band)
                 test_loader = DataLoader(test_set, batch_size, shuffle=window_pred, pin_memory=True)
                 
+                # LOSS FUNCTION
+                criterion = CustomLoss(mode=loss_mode, window_pred=window_pred, alpha_end=alpha)
+
                 # EVALUATE THE MODEL
                 corr = []
                 nd_corr = []
@@ -134,14 +154,16 @@ def main(config, wandb_upload, dataset, key):
                         eeg = data['eeg'].to(device, dtype=torch.float)
                         stima = data['stima'].to(device, dtype=torch.float)
                         
-                        y_hat, loss = mdl(eeg, targets=stima)
+                        y_hat = mdl(eeg)
+
+                        loss = criterion(preds=y_hat, targets = stima)
 
                         # Calculates Pearson's coef. for the matching distribution and for the null one
-                        nd_loss = get_loss(torch.roll(stima, time_shift), y_hat, window_pred=window_pred)
+                        nd_loss = criterion(preds=y_hat, targets = torch.roll(stima, time_shift))
 
                         if dec_acc:
                             stimb = data['stimb'].to(device, dtype=torch.float)
-                            unat_loss = get_loss(stimb, y_hat, window_pred=window_pred)
+                            unat_loss = criterion(preds=y_hat, targets = stimb)
                             # Decoding accuracy
                             if loss.item() < unat_loss.item():
                                 att_corr += 1
@@ -210,7 +232,8 @@ if __name__ == "__main__":
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
-    
+    parser.add_argument("--finetuned", action='store_true', help="When included search for the model on the finetune folder")
+
     args = parser.parse_args()
 
     wandb_upload = args.wandb
@@ -228,4 +251,4 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, args.key)
+    main(config, wandb_upload, args.dataset, args.key, args.finetuned)

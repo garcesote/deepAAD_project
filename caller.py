@@ -1,103 +1,8 @@
 import subprocess
 
-def run_experiment(dataset, key, train=True, eval=True, train_ridge=True, eval_ridge=True):
-    # train
-    cmd = [
-            "py", "train_models.py", 
-            "--config", "configs/replicate_results/config.yaml",
-            "--wandb",
-            "--key", key,
-            "--dataset", dataset
-        ]  
-    print(cmd)
-    if train: subprocess.run(cmd)
-    # eval
-    cmd = [
-            "py", "evaluate.py", 
-            "--config", "configs/replicate_results/config.yaml",
-            "--wandb",
-            "--key", key,
-            "--dataset", dataset
-        ]  
-    print(cmd)
-    if eval: subprocess.run(cmd)
-    
-    cmd = [
-        "py", "train_ridge.py",
-        "--wandb", 
-        "--key", key,
-        "--dataset", dataset
-    ]  
-    print(cmd)
-    if train_ridge: subprocess.run(cmd) 
-    # eval_ridge
-    cmd = [
-        "py", "eval_ridge.py", 
-        "--key", key,
-        "--dataset", dataset,
-        "--wandb"
-    ]  
-    print(cmd)
-    if eval_ridge: subprocess.run(cmd)
-
-# run_experiment('fulsang', 'population', train=False, train_ridge=False)
-# run_experiment('jaulab', 'population', train=False, train_ridge=False, eval_ridge=False)
-# run_experiment('skl', 'population')
-# run_experiment('fulsang', 'subj_specific', train=False)
-# run_experiment('jaulab', 'subj_specific')
-# run_experiment('skl', 'population')
-
-# eeg_bands = ['delta', 'theta', 'alpha', 'beta']
-
-# for band in eeg_bands:
-
-#     # cmd = [
-#     #     "py", "train_ridge.py", 
-#     #     "--key", 'subj_specific',
-#     #     "--dataset", 'fulsang',
-#     #     "--preproc_mode", "bandAnalysis",
-#     #     "--data_type", "npy",
-#     #     "--eeg_band", band
-#     # ]  
-#     # print(cmd)
-#     # subprocess.run(cmd)
-
-#     # eval_ridge
-#     cmd = [
-#         "py", "eval_ridge.py", 
-#         "--key", 'subj_specific',
-#         "--dataset", 'fulsang',
-#         "--preproc_mode", "bandAnalysis",
-#         "--data_type", "npy",
-#         "--eeg_band", band,
-#         "--wandb"
-#     ]  
-#     print(cmd)
-#     subprocess.run(cmd)
-
-# cmd = [
-#     "py", "evaluate.py", 
-#     "--config", "configs/spatial_audio/eval_mesd_dnn.yaml",
-#     "--key", 'population',
-#     "--dataset", 'fulsang',
-#     "--wandb"
-# ]  
-# print(cmd)
-# subprocess.run(cmd)
-
-# cmd = [
-#     "py", "evaluate.py", 
-#     "--config", "configs/spatial_audio/dnn_models.yaml",
-#     "--key", 'population',
-#     "--dataset", 'fulsang',
-#     "--wandb"
-# ]  
-# print(cmd)
-# subprocess.run(cmd)
-
 cmd = [
-    "py", "eval_linear.py", 
-    "--config", "configs/spatial_audio/eval_mesd_linear.yaml",
+    "py", "train_models.py", 
+    "--config", "configs/spatial_audio/eval_mesd_dnn.yaml",
     "--key", 'subj_specific',
     "--dataset", 'fulsang',
     "--wandb"
@@ -106,9 +11,48 @@ print(cmd)
 subprocess.run(cmd)
 
 cmd = [
-    "py", "eval_linear.py", 
-    "--config", "configs/spatial_audio/linear_models.yaml",
+    "py", "train_models.py", 
+    "--config", "configs/spatial_audio/dnn_models.yaml",
     "--key", 'subj_specific',
+    "--dataset", 'fulsang',
+    "--wandb"
+]  
+print(cmd)
+
+subprocess.run(cmd)
+
+cmd = [
+    "py", "evaluate.py", 
+    "--config", "configs/spatial_audio/eval_mesd_dnn.yaml",
+    "--key", 'subj_specific',
+    "--dataset", 'fulsang',
+    "--wandb"
+]  
+print(cmd)
+subprocess.run(cmd)
+
+cmd = [
+    "py", "evaluate.py", 
+    "--config", "configs/spatial_audio/dnn_models.yaml",
+    "--key", 'subj_specific',
+    "--dataset", 'fulsang',
+    "--wandb"
+]  
+print(cmd)
+subprocess.run(cmd)
+
+cmd = [
+    "py", "finetune.py", 
+    "--config", "configs/spatial_audio/eval_mesd_dnn.yaml",
+    "--dataset", 'fulsang',
+    "--wandb"
+]  
+print(cmd)
+subprocess.run(cmd)
+
+cmd = [
+    "py", "finetune.py", 
+    "--config", "configs/spatial_audio/dnn_models.yaml",
     "--dataset", 'fulsang',
     "--wandb"
 ]  

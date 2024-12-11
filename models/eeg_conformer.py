@@ -35,7 +35,6 @@ class PatchEmbedding(nn.Module):
 
         self.projection = nn.Conv2d(config.n_embd, config.n_embd, (1, 1), stride=(1, 1))  # transpose, conv could enhance fitting ability slightly
 
-
     def forward(self, x: Tensor) -> Tensor:
         b, _, _, _ = x.shape
         for layer in self.shallownet:
@@ -247,12 +246,14 @@ class Conformer(nn.Sequential):
         print("Number of parameters: %.2fM" % (self.get_num_params()/1e6,))
     
     def get_num_params(self):
+
         """
         Return the number of parameters in the model.
         For non-embedding count (default), the position embeddings get subtracted.
         The token embeddings would too, except due to the parameter sharing these
         params are actually used as weights in the final layer, so we include them.
         """
+
         n_params = sum(p.numel() for p in self.parameters())
         return n_params
     
@@ -288,8 +289,13 @@ class Conformer(nn.Sequential):
         # if preds.shape[-1] == 1:
         #     preds = torch.squeeze(preds)
 
-        if targets is not None:
-            loss = get_loss(preds, targets, window_pred=self.window_pred)
-        else:
-            loss = None
-        return preds, loss
+        return preds
+    
+    # Freeze embedding and encoder blocks when finetunning
+    def finetune(self):
+        for param in self.embed.parameters():
+            param.requires_grad=False
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+
+        

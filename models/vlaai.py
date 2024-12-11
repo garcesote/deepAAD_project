@@ -318,10 +318,7 @@ class VLAAI(nn.Module):
             if self.use_skip:
                 x += eeg 
 
-        x = self.out_linear(x)
-        x = torch.squeeze(x, dim=1)
-        if targets is None:
-            loss = None
-        else:
-            loss = get_loss(x, targets, window_pred= self.window_pred)
-        return x, loss
+        preds = self.out_linear(x)
+        preds = torch.squeeze(preds, dim=1)
+    
+        return preds

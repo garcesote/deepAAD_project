@@ -35,19 +35,20 @@ class FCNN(nn.Module):
         
         self.model =  nn.Sequential(*layers) # * para introducir los elementos de la lista por separado (si no esta un elemento con la lista)
 
-    def forward(self, input, targets=None):
+    def forward(self, input):
         # input shape must be (batch, n_chan, n_samples)
         if list(input.shape) == [input.shape[0], self.n_chan, self.n_samples]:
-            
             preds = self.model(input)
-            
-            if targets is None:
-                loss = None
-            else:
-                loss = get_loss(preds, targets, window_pred=self.window_pred)
-            return preds, loss
+            return preds
         else:
             raise ValueError("Se debe introducir un tensor con las dimensiones adecuadas (B, C, T)")
+    
+    # Freeze all layers except the last one
+    def finetune(self):
+        for layer in self.model[:-1]:
+            for param in layer.parameters():
+                param.requires_grad = False
+
 
 class CNN(nn.Module):
 
@@ -103,11 +104,16 @@ class CNN(nn.Module):
             x = self.spatial(x) # (B, F1, T, C) => (B, F1*D, T, 1)
             x = self.depthwise(x) # (B, F1*D, T, 1) => (B, F2, T, 1)
             preds = self.classifier(x) # (B, F2, T, 1) => (B, F2*T) => (B, n_out)
-
-            if targets is None:
-                loss = None
-            else:
-                loss = get_loss(targets, preds, window_pred=self.window_pred)
-            return preds, loss
+            return preds
+        
         else:
             raise ValueError('El input de la red tiene que guardar dimensiones (B, C, T)')
+        
+    # Freeze the temporal, spatial and depthwise blocks
+    def finetune(self):
+        for param in self.temporal.parameters():
+            param.requires_grad = False
+        for param in self.spatial.parameters():
+            param.requires_grad = False
+        for param in self.depthwise.parameters():
+            param.requires_grad = False

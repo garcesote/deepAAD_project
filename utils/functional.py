@@ -106,8 +106,17 @@ def get_other_subjects(subject, dataset):
     other_subjects = list(set(ds_subjects[dataset]) - set(subject))
     return other_subjects
 
+# Compute the interaural level difference ILD (dB)
+def compute_ild(left_channel, right_channel):
+    # Calculate RMS for each channel
+    rms_left = np.sqrt(np.mean(left_channel**2))
+    rms_right = np.sqrt(np.mean(right_channel**2))
+    # Calculate ILD in dB
+    ild = 10 * np.log10(rms_left / rms_right)
+    return ild
+
 # Calculates the pearson correlation between two tensors
-def get_loss(x: torch.tensor, y: torch.tensor, eps=1e-8, window_pred=False, mode='mean'):
+def get_loss(x: torch.tensor, y: torch.tensor, eps=1e-8, window_pred=False, mode='mean', alpha=None):
 
     """Correlation function that returns calculation the Person's coef
     
@@ -124,7 +133,15 @@ def get_loss(x: torch.tensor, y: torch.tensor, eps=1e-8, window_pred=False, mode
     window_pred: bool
         when the window is estimated there's no need for transpose dims
 
+    mode: str Select the loss operating mode:
+        - 'mean': return the mean of the computed loss
+        - 'ressamble': force the model to have similar coefficients meaning similar behaviour
+        - 'ild': add an ild coefficient to the correlation mean of the channels
+        - 'ressamble_ild': add an ild coefficient to the correlation mean plus ressamble feature of the channels
+
     """
+
+    assert x.shape == y.shape, "Predictions and targets must have same dimensions"
 
     if not window_pred:
         x, y = x.T, y.T # (n_stim, n_samples)
@@ -138,7 +155,17 @@ def get_loss(x: torch.tensor, y: torch.tensor, eps=1e-8, window_pred=False, mode
         corr[chan] = torch.sum(vx * vy) / (torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)) + eps)
 
     if mode == 'mean':
-        return torch.mean(- corr)
+        return torch.mean(-corr)
+    if mode == 'ressamble':
+        assert n_stim == 2, "When computing loss on ressamble mode 2 channels must be introduced"
+        assert alpha is not None, "When computing loss on ressamble mode alpha value must be introduced"
+        diff = torch.abs(corr[0] - corr[1])
+        return torch.mean(-corr) + alpha * diff
+    if mode == 'ild':
+        assert n_stim == 2, "When computing loss on ild mode 2 channels must be introduced"
+        assert alpha is not None, "When computing loss on ild mode alpha value must be introduced"
+        diff_ild = torch.abs(compute_ild(x[0], x[1]) - compute_ild(x[0], x[1]))
+        return torch.mean(-corr) + alpha * diff_ild
     else: # for classifying the correlations
         return(corr)
     
