@@ -1,5 +1,5 @@
 import torch
-from utils.functional import set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
+from utils.functional import multiple_loss_opt, set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
 from utils.datasets import CustomDataset
 from utils.loss_functions import CustomLoss
 from torch.utils.data import DataLoader
@@ -20,6 +20,7 @@ def main(config, wandb_upload, dataset, key, finetuned):
     global_path = config['global_path']
     global_data_path = config['global_data_path']
     project = 'spatial_audio'
+    # wandb_upload=True
     # window_list = [64, 128, 320, 640, 1280, 2560] # 1s, 2s, 5s, 10s, 20s, 40s
     window_list = [64, 128, 320, 640, 1600, 3200] # 1s, 2s, 5s, 10s, 25s, 50s
     # window_list = [3200]
@@ -30,8 +31,6 @@ def main(config, wandb_upload, dataset, key, finetuned):
         exp_name =  exp_name + '_' + config['seed']
     else: 
         set_seeds() # default seed = 42
-
-    finetuned=True
     
     for run in config['runs']:
 
@@ -39,14 +38,13 @@ def main(config, wandb_upload, dataset, key, finetuned):
         model = run['model']
         exp_name = config['exp_name'] + '_' + model
 
-        if finetuned: key = 'population'
         mdl_load_folder = 'finetune_models' if finetuned else 'models'
 
         mdl_load_path = os.path.join(global_path, 'results', project, key, mdl_load_folder)
 
         tag = 'evaluation_finetune' if finetuned else 'evaluation'
 
-        if wandb_upload: wandb.init(project=project, name=exp_name, tags=tag, config=run)
+        if wandb_upload: wandb.init(project=project, name=exp_name, tags=[tag], config=run)
 
         window_accuracies = {win//64: None for win in window_list}
 
@@ -69,10 +67,15 @@ def main(config, wandb_upload, dataset, key, finetuned):
             hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
             time_shift = 100
             dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
-            batch_size =  eval_window if not window_pred else 1
+            batch_size =  eval_window if not window_pred else batch_size
             lr = float(train_params['lr'])
             loss_mode = train_params['loss_mode'] if 'loss_mode' in train_params.keys() else 'mean'
             alpha = train_params['alpha_loss'] if 'alpha_loss' in train_params.keys() else 0
+
+            # If the loss mode only takes ILD into account and is finetunned, eval with both correlation and ils with alpha=0.1
+            if loss_mode in ['ild_mae', 'ild_mse']:
+                loss_mode = 'corr_' + loss_mode
+                alpha = 0.1
 
             if fixed: assert(dataset=='jaulab') # Only fixed subject for jaulab dataset
             dataset_name = dataset+'_fixed' if fixed else dataset
@@ -85,6 +88,8 @@ def main(config, wandb_upload, dataset, key, finetuned):
             # Add extensions to the model name depending on the params
             if preproc_mode is not None: mdl_name += '_' + preproc_mode
             if eeg_band is not None: mdl_name += '_' + eeg_band
+            if loss_mode != 'mean': mdl_name += '_' + loss_mode
+            if alpha != 0: mdl_name += '_alpha=' + str(alpha)
             if rnd_trials: mdl_name += '_rnd'
             if hrtf: mdl_name += '_hrtf'
 
@@ -102,7 +107,7 @@ def main(config, wandb_upload, dataset, key, finetuned):
             dec_results = []
             eval_mean_results = []
             
-            selected_subjects = get_subjects(dataset)
+            selected_subjects = get_subjects(dataset)[:5]
 
             for subj in selected_subjects:
 
@@ -144,8 +149,9 @@ def main(config, wandb_upload, dataset, key, finetuned):
                 criterion = CustomLoss(mode=loss_mode, window_pred=window_pred, alpha_end=alpha)
 
                 # EVALUATE THE MODEL
-                corr = []
-                nd_corr = []
+                eval_loss = []
+                eval_nd_loss = []
+                eval_loss_list = []
                 att_corr = 0
 
                 with torch.no_grad():
@@ -156,31 +162,47 @@ def main(config, wandb_upload, dataset, key, finetuned):
                         
                         y_hat = mdl(eeg)
 
-                        loss = criterion(preds=y_hat, targets = stima)
+                        loss_list = criterion(preds=y_hat, targets = stima)
+                        loss = loss_list[0]
 
                         # Calculates Pearson's coef. for the matching distribution and for the null one
-                        nd_loss = criterion(preds=y_hat, targets = torch.roll(stima, time_shift))
+                        nd_loss = criterion(preds=y_hat, targets = torch.roll(stima, time_shift))[0]
 
                         if dec_acc:
                             stimb = data['stimb'].to(device, dtype=torch.float)
-                            unat_loss = criterion(preds=y_hat, targets = stimb)
+                            unat_loss_list = criterion(preds=y_hat, targets = stimb)
+                            unat_loss = criterion(preds=y_hat, targets = stimb)[0]
                             # Decoding accuracy
                             if loss.item() < unat_loss.item():
                                 att_corr += 1
 
-                        corr.append(-loss.item())
-                        nd_corr.append(-nd_loss.item())
+                        # Append all losses for eval results
+                        eval_loss.append(-loss.item())
+                        eval_loss_list.append(loss_list)
+                        eval_nd_loss.append(-nd_loss.item())
 
-                eval_results[subj] = corr
-                nd_results[subj] = nd_corr
+                eval_results[subj] = eval_loss
+                nd_results[subj] = eval_nd_loss
                 dec_accuracy = (att_corr / len(test_loader)) * 100
                 dec_results.append(dec_accuracy)
-                eval_mean_results.append(mean(corr))
                 
-                print(f'Subject {subj} | corr_mean {mean(corr)} | decode_accuracy {dec_accuracy}')
+                if multiple_loss_opt(loss_mode):
+                    eval_mean_results.append([mean(eval_loss), torch.mean(torch.hstack([loss_list[1] for loss_list in eval_loss_list])).item(), torch.mean(torch.hstack([loss_list[2] for loss_list in eval_loss_list])).item()])
+                else:
+                    eval_mean_results.append([mean(eval_loss)])
+
+                print(f'Subject {subj} | corr_mean {mean(eval_loss)} | decode_accuracy {dec_accuracy}')
 
             if wandb_upload:
-                wandb.log({'window': eval_window, 'corr_subj_mean': np.mean(eval_mean_results), 'corr_subj_std': np.std(eval_mean_results), 'decAcc_subj_mean': np.mean(dec_results), 'decAcc_subj_std': np.std(dec_results)})
+                loss_mean_results = [results[0] for results in eval_mean_results]
+                wandb_log = {'window': eval_window, 'loss_subj_mean': np.mean(loss_mean_results), 'loss_subj_std': np.std(loss_mean_results), 'decAcc_subj_mean': np.mean(dec_results), 'decAcc_subj_std': np.std(dec_results)}
+                # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
+                if multiple_loss_opt(loss_mode):
+                    wandb_log['corr_subj_mean'] = np.mean([results[1] for results in eval_mean_results])
+                    wandb_log['ild_subj_mean'] = np.mean([results[2] for results in eval_mean_results])
+                    wandb_log['corr_subj_std'] = np.std([results[1] for results in eval_mean_results])
+                    wandb_log['ild_subj_std'] = np.std([results[2] for results in eval_mean_results])
+                wandb.log(wandb_log)
 
             # Save the window results to compute mesd
             window_accuracies[eval_window//64] = dec_results
@@ -207,8 +229,12 @@ def main(config, wandb_upload, dataset, key, finetuned):
         for subj in range(len(selected_subjects)):
             tau = np.array(list(window_accuracies.keys()))
             p = np.array([results[subj] / 100 for results in window_accuracies.values()])
-            mesd, N_mesd, tau_mesd, p_mesd = compute_MESD(tau,p)
-            print(f"For subject {subj} the minimal expected switch duration is MESD = {mesd} \nat an otpimal working point of (tau, p) = ({tau_mesd}, {p_mesd}) \nwith N = {N_mesd} states in the Markov chain.")
+            if np.any(p > 0.5):
+                mesd, N_mesd, tau_mesd, p_mesd = compute_MESD(tau,p)
+                print(f"For subject {subj} the minimal expected switch duration is MESD = {mesd} \nat an otpimal working point of (tau, p) = ({tau_mesd}, {p_mesd}) \nwith N = {N_mesd} states in the Markov chain.")
+            else:
+                mesd, N_mesd, tau_mesd, p_mesd = 0, 0, 0, 0
+                print(f"For subject {subj} the MESD could not be computed")
             mesd_results = [mesd, N_mesd, tau_mesd, p_mesd]
             for idx, value in zip(list(mesd_dict.keys()), mesd_results):
                 mesd_dict[idx].append(value)
@@ -228,10 +254,10 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/spatial_audio/eval_mesd_dnn.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/spatial_audio/ild_tunning.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--finetuned", action='store_true', help="When included search for the model on the finetune folder")
 
     args = parser.parse_args()

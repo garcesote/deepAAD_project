@@ -46,19 +46,62 @@ class CustomLoss(nn.Module):
 
         if self.mode == 'mean':
             corr = self._compute_correlation(preds, targets, eps=eps)
-            return torch.mean(-corr)
+            loss = torch.mean(-corr)
+            return [loss]
         
         elif self.mode == 'ressamble':
             corr = self._compute_correlation(preds, targets, eps=eps)
             assert preds.shape[0] == 2, "When computing loss on ressamble mode 2 channels must be introduced"
             diff = torch.abs(corr[0] - corr[1])
-            return torch.mean(-corr) + alpha * diff
+            corr_loss = torch.mean(-corr)
+            loss = corr_loss + alpha * diff
+            return [loss, corr, diff]
         
-        if self.mode == 'ild':
+        elif self.mode == 'ild_mae':
+            assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
+            ild_mae = torch.abs(self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets[0], targets[1]))
+            return [ild_mae]
+        
+        elif self.mode == 'ild_mse':
+            assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
+            ild_mse = (self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets[0], targets[1]))**2
+            return [ild_mse]
+        
+        elif self.mode == 'diff_mse':
+            assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
+            diff_pred = preds[0] - preds[1]
+            diff_target = targets[0] - targets[1]
+            diff_mse = torch.mean((diff_pred - diff_target)**2)
+            return [ild_mse]
+        
+        elif self.mode == 'corr_ild_mae':
             corr = self._compute_correlation(preds, targets, eps=eps)
             assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
-            diff_ild = torch.abs(self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets[0], targets[1]))
-            return torch.mean(-corr) + alpha * diff_ild
+            ild_mae = torch.abs(self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets[0], targets[1]))
+            corr_loss = torch.mean(-corr)
+            loss = corr_loss + alpha * ild_mae
+            return [loss, corr_loss, ild_mae]
+        
+        elif self.mode == 'corr_ild_mse':
+            corr = self._compute_correlation(preds, targets, eps=eps)
+            assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
+            ild_mse = (self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets[0], targets[1]))**2
+            corr_loss = torch.mean(-corr)
+            loss = corr_loss + alpha * ild_mse
+            return [loss, corr_loss, ild_mse]
+        
+        elif self.mode == 'corr_diff_mse':
+            corr = self._compute_correlation(preds, targets, eps=eps)
+            assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
+            diff_pred = preds[0] - preds[1]
+            diff_target = targets[0] - targets[1]
+            diff_mse = torch.mean((diff_pred - diff_target)**2)
+            corr_loss = torch.mean(-corr)
+            loss = corr_loss + alpha * diff_mse
+            return [loss, corr_loss, diff_mse]
+        
+        else:
+            raise ValueError('Introduce a valid loss')
 
     # Compute the pearson correlation coefficient
     def _compute_correlation(self, preds, targets, eps):

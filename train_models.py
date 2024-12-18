@@ -4,7 +4,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from models.dnn import FCNN, CNN
 from models.vlaai import VLAAI
 from models.eeg_conformer import Conformer, ConformerConfig
-from utils.functional import get_data_path, get_channels, get_subjects, set_seeds, get_loss
+from utils.functional import multiple_loss_opt, get_data_path, get_channels, get_subjects, set_seeds, get_loss
 from utils.datasets import CustomDataset
 from tqdm import tqdm
 from utils.loss_functions import CustomLoss
@@ -62,6 +62,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
         val_hop = ds_config['hop'] if window_pred else 1
+        shuffle = ds_config['shuffle'] if 'shuffle' in ds_config.keys() else True
 
         # Saving paths
         mdl_save_path = os.path.join(global_path, 'results', project, key, 'models')
@@ -71,7 +72,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         if key == 'population':
             selected_subj = [get_subjects(dataset)]
         else:
-            selected_subj = get_subjects(dataset)
+            selected_subj = get_subjects(dataset)[:5]
 
         for subj in selected_subj:
             
@@ -123,8 +124,8 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
             val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=val_hop, data_type=data_type, leave_one_out=leave_one_out, 
                                     fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band = eeg_band)
             
-            train_loader = DataLoader(train_set, batch_size, shuffle=True, pin_memory=True)
-            val_loader = DataLoader(val_set, batch_size, shuffle= window_pred, pin_memory=True)
+            train_loader = DataLoader(train_set, batch_size, shuffle = shuffle, pin_memory=True)
+            val_loader = DataLoader(val_set, batch_size, shuffle = window_pred, pin_memory=True)
             
             # OPTIMIZER PARAMS
             optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
@@ -163,14 +164,15 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                     with torch.autocast(device_type=device, dtype=torch.bfloat16):
                         preds = mdl(eeg)
 
-                    loss = criterion(preds=preds, targets = stima)
+                    loss_list = criterion(preds=preds, targets=stima)
+                    loss = loss_list[0]
 
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
                     
                     # Append neg. loss corresponding to the coef. Pearson
-                    train_loss.append(loss)
+                    train_loss.append(loss_list)
 
                     # Actualize the state of the train loss
                     train_loader_tqdm.set_postfix({'train_loss': loss})
@@ -189,19 +191,20 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
 
                         preds = mdl(eeg)
 
-                        loss = criterion(preds=preds, targets = stima)
+                        loss_list = criterion(preds=preds, targets = stima)
+                        loss = loss_list[0]
                         
                         if dec_acc:
                             stimb = data['stimb'].to(device, dtype=torch.float)
                             # Decoding accuracy of the model
-                            unat_loss = criterion(preds=preds, targets = stimb)
+                            unat_loss = criterion(preds=preds, targets = stimb)[0]
                             if loss.item() < unat_loss.item():
                                 val_att_corr += 1
 
-                        val_loss.append(loss)
+                        val_loss.append(loss_list)
 
-                mean_val_loss = torch.mean(torch.hstack(val_loss)).item()
-                mean_train_loss = torch.mean(torch.hstack(train_loss)).item()
+                mean_val_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in val_loss])).item()
+                mean_train_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in train_loss])).item()
                 val_decAccuracy = val_att_corr / len(val_loader) * 100
 
                 scheduler.step(-mean_val_loss)
@@ -210,7 +213,14 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                 print(f'Epoch: {epoch} | Train loss: {-mean_train_loss:.4f} | Val loss/acc: {-mean_val_loss:.4f}/{val_decAccuracy:.4f}')
                 
                 if wandb_upload:
-                    wandb.log({'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy})
+                    wandb_log = {'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
+                    # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
+                    if multiple_loss_opt(loss_mode):
+                        wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
+                        wandb_log['train_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in train_loss])).item()
+                        wandb_log['val_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in val_loss])).item()
+                        wandb_log['train_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in train_loss])).item()
+                    wandb.log(wandb_log)
             
                 train_mean_loss.append(mean_train_loss)
                 val_mean_loss.append(mean_val_loss)
@@ -224,7 +234,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                     best_state_dict = mdl.state_dict()
             
             dataset_filename = dataset+'_fixed' if fixed and dataset == 'jaulab' else dataset
-
+            
             if not tunning:
 
                 # Save best final model
@@ -234,6 +244,8 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                 # Add extensions to the model name depending on the params
                 if preproc_mode is not None: mdl_name += '_' + preproc_mode
                 if eeg_band is not None: mdl_name += '_' + eeg_band
+                if loss_mode != 'mean': mdl_name += '_' + loss_mode
+                if alpha != 0: mdl_name += '_alpha=' + str(alpha)
                 if rnd_trials: mdl_name += '_rnd'
                 if hrtf: mdl_name += '_hrtf'
             
@@ -265,14 +277,14 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/spatial_audio/eval_mesd_dnn.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/spatial_audio/diff_mse_criterion.yaml", help="Ruta al archivo config")
     # parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='subj_s', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
 

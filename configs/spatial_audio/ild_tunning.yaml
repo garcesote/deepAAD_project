@@ -1,0 +1,124 @@
+global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
+# global_data_path: 'D:\igarcia\AAD_Data'
+
+exp_name: 'ild_tunning'
+
+runs:
+
+  - model: 'CNN'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 2e-05
+      weight_decay: 1e-08                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      loss_mode: 'ild_mae'
+      alpha_loss: 0.5
+    dataset_params:
+      window_len: 50  
+      hop: 1          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      window_pred: False
+      hrtf: True
+      shuffle: False
+    model_params:
+      F1: 8
+      D: 8
+      F2: 64
+      AP1: 2
+      AP2: 4
+      dropout: 0.2
+      input_samples: 50
+      output_dim: 2
+
+  - model: 'CNN'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 2e-05
+      weight_decay: 1e-08                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      loss_mode: 'ild_mse'
+      alpha_loss: 1
+    dataset_params:
+      window_len: 50  
+      hop: 1          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      window_pred: False
+      hrtf: True
+      shuffle: False
+    model_params:
+      F1: 8
+      D: 8
+      F2: 64
+      AP1: 2
+      AP2: 4
+      dropout: 0.2
+      input_samples: 50
+      output_dim: 2
+
+  - model: 'CNN'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 2e-05
+      weight_decay: 1e-08                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      loss_mode: 'corr_ild_mae'
+      alpha_loss: 0.1
+    dataset_params:
+      window_len: 50  
+      hop: 1          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      window_pred: False
+      hrtf: True
+      shuffle: False
+    model_params:
+      F1: 8
+      D: 8
+      F2: 64
+      AP1: 2
+      AP2: 4
+      dropout: 0.2
+      input_samples: 50
+      output_dim: 2
+
+  - model: 'CNN'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 2e-05
+      weight_decay: 1e-08                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      loss_mode: 'corr_ild_mse'
+      alpha_loss: 0.1
+    dataset_params:
+      window_len: 50  
+      hop: 1          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      window_pred: False
+      hrtf: True
+      shuffle: False
+    model_params:
+      F1: 8
+      D: 8
+      F2: 64
+      AP1: 2
+      AP2: 4
+      dropout: 0.2
+      input_samples: 50
+      output_dim: 2

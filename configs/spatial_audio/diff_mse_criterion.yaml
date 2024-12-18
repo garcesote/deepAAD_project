@@ -3,29 +3,9 @@ global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
 # global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
 # global_data_path: 'D:\igarcia\AAD_Data'
 
-exp_name: 'single_chan'
+exp_name: 'diff_mse_criterion'
 
 runs: # All models trained with window size of 5s
-
-  - model: 'FCNN'
-    train_params:
-      batch_size: 128              
-      max_epoch: 200              
-      lr: 1e-06
-      weight_decay: 1e-04                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-    dataset_params:
-      window_len: 50  
-      hop: 1          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      unit_output: True
-    model_params:
-      n_hidden: 3
-      dropout: 0.45
-      n_samples: 50
 
   - model: 'CNN'
     train_params:
@@ -35,13 +15,17 @@ runs: # All models trained with window size of 5s
       weight_decay: 1e-08                      
       early_stopping_patience: 5
       scheduler_patience: 2
+      loss_mode: 'corr_diff_mse'
+      alpha_loss: 0.1
     dataset_params:
       window_len: 50  
       hop: 1          
       filt: False       
       fixed: False      
       rnd_trials: False   
-      unit_output: True
+      window_pred: False
+      hrtf: True
+      shuffle: False
     model_params:
       F1: 8
       D: 8
@@ -50,31 +34,64 @@ runs: # All models trained with window size of 5s
       AP2: 4
       dropout: 0.2
       input_samples: 50
-  
-  - model: 'Conformer'
+      output_dim: 2
+
+  - model: 'CNN'
     train_params:
       batch_size: 128              
       max_epoch: 200              
-      lr: 1e-06
-      weight_decay: 1e-04                      
+      lr: 2e-05
+      weight_decay: 1e-08                      
       early_stopping_patience: 5
       scheduler_patience: 2
+      loss_mode: 'corr_diff_mse'
+      alpha_loss: 0.2
     dataset_params:
-      window_len: 128  
+      window_len: 50  
       hop: 1          
       filt: False       
       fixed: False      
       rnd_trials: False   
-      unit_output: True
+      window_pred: False
+      hrtf: True
+      shuffle: False
     model_params:
-      mlp_ratio: 2
-      enc_layers: 2
-      n_head: 4
-      n_embd: 40
-      kernel_temp: 8
-      pool: 10
-      pool_hop: 4
-      block_size: 128 # 2s
-      dropout: 0.4
-      classifier: True
-      bias: True
+      F1: 8
+      D: 8
+      F2: 64
+      AP1: 2
+      AP2: 4
+      dropout: 0.2
+      input_samples: 50
+      output_dim: 2
+      output_dim: 2
+
+  - model: 'CNN'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 2e-05
+      weight_decay: 1e-08                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      loss_mode: 'corr_diff_mse'
+      alpha_loss: 0.5
+    dataset_params:
+      window_len: 50  
+      hop: 1          
+      filt: False       
+      fixed: False      
+      rnd_trials: False   
+      window_pred: False
+      hrtf: True
+      shuffle: False
+    model_params:
+      F1: 8
+      D: 8
+      F2: 64
+      AP1: 2
+      AP2: 4
+      dropout: 0.2
+      input_samples: 50
+      output_dim: 2
+      output_dim: 2

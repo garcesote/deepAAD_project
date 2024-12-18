@@ -249,3 +249,5 @@ def set_seeds(seed: int=42):
     torch.cuda.manual_seed(seed)
     np.random.seed(seed)
 
+def multiple_loss_opt(loss_mode:str):
+    return loss_mode in ['ressamble', 'corr_ild_mae', 'corr_ild_mse', 'corr_diff_mse']

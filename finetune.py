@@ -1,5 +1,5 @@
 import torch
-from utils.functional import set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
+from utils.functional import multiple_loss_opt, set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
 from utils.datasets import CustomDataset
 from utils.loss_functions import CustomLoss
 from torch.utils.data import DataLoader
@@ -16,12 +16,11 @@ import json
 import wandb
 import sys
 
-def main(config, wandb_upload, dataset, early_stop, lr_decay=0.5):
+def main(config, wandb_upload, dataset, key, early_stop, lr_decay=0.5):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
     project = 'spatial_audio'
-    key = 'population'
     
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
@@ -67,6 +66,7 @@ def main(config, wandb_upload, dataset, early_stop, lr_decay=0.5):
         window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
         val_hop = ds_config['hop'] if window_pred else 1
+        shuffle = ds_config['shuffle'] if 'shuffle' in ds_config.keys() else True
 
         # Saving paths
         mdl_save_path = os.path.join(global_path, 'results', project, key, 'finetune_models')
@@ -91,14 +91,17 @@ def main(config, wandb_upload, dataset, early_stop, lr_decay=0.5):
         #     selected_subj = [get_subjects(dataset)]
         # else:
         #     selected_subj = get_subjects(dataset)
-        selected_subj = get_subjects(dataset)
+        selected_subj = get_subjects(dataset)[:5]
 
         for subj in selected_subj:
 
             print(f'Finetunning {model} on {subj} with {dataset} data...')
             
             mdl_folder = os.path.join(mdl_load_path, dataset_name+'_data', mdl_name)
-            mdl_filename = os.listdir(mdl_folder)[0] # only a single trained model for finetunning
+            if key == 'population':
+                mdl_filename = os.listdir(mdl_folder)[0] # only a single trained model
+            else:
+                mdl_filename = get_filename(mdl_folder, subj) # search for the model related with the subj
             
             # LOAD THE MODEL
             if model == 'FCNN':
@@ -133,7 +136,7 @@ def main(config, wandb_upload, dataset, early_stop, lr_decay=0.5):
             val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=val_hop, data_type=data_type, leave_one_out=leave_one_out, 
                                     fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band = eeg_band)
             
-            train_loader = DataLoader(train_set, batch_size, shuffle=True, pin_memory=True)
+            train_loader = DataLoader(train_set, batch_size, shuffle= shuffle, pin_memory=True)
             val_loader = DataLoader(val_set, batch_size, shuffle= window_pred, pin_memory=True)
             
             # OPTIMIZER PARAMS: optimize only parameters which contains grad
@@ -173,14 +176,15 @@ def main(config, wandb_upload, dataset, early_stop, lr_decay=0.5):
                     with torch.autocast(device_type=device, dtype=torch.bfloat16):
                         preds = mdl(eeg)
 
-                    loss = criterion(preds=preds, targets = stima)
+                    loss_list = criterion(preds=preds, targets=stima)
+                    loss = loss_list[0]
 
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
                     
                     # Append neg. loss corresponding to the coef. Pearson
-                    train_loss.append(loss)
+                    train_loss.append(loss_list)
 
                     # Actualize the state of the train loss
                     train_loader_tqdm.set_postfix({'train_loss': loss})
@@ -199,19 +203,20 @@ def main(config, wandb_upload, dataset, early_stop, lr_decay=0.5):
 
                         preds = mdl(eeg)
 
-                        loss = criterion(preds=preds, targets = stima)
+                        loss_list = criterion(preds=preds, targets=stima)
+                        loss = loss_list[0]
                         
                         if dec_acc:
                             stimb = data['stimb'].to(device, dtype=torch.float)
                             # Decoding accuracy of the model
-                            unat_loss = criterion(preds=preds, targets = stimb)
+                            unat_loss = criterion(preds=preds, targets = stimb)[0]
                             if loss.item() < unat_loss.item():
                                 val_att_corr += 1
 
-                        val_loss.append(loss)
+                        val_loss.append(loss_list)
 
-                mean_val_loss = torch.mean(torch.hstack(val_loss)).item()
-                mean_train_loss = torch.mean(torch.hstack(train_loss)).item()
+                mean_val_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in val_loss])).item()
+                mean_train_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in train_loss])).item()
                 val_decAccuracy = val_att_corr / len(val_loader) * 100
 
                 scheduler.step(-mean_val_loss)
@@ -220,8 +225,15 @@ def main(config, wandb_upload, dataset, early_stop, lr_decay=0.5):
                 print(f'Epoch: {epoch} | Train loss: {-mean_train_loss:.4f} | Val loss/acc: {-mean_val_loss:.4f}/{val_decAccuracy:.4f}')
                 
                 if wandb_upload:
-                    wandb.log({'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy})
-            
+                    wandb_log = {'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
+                    # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
+                    if multiple_loss_opt(loss_mode):
+                        wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
+                        wandb_log['train_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in train_loss])).item()
+                        wandb_log['val_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in val_loss])).item()
+                        wandb_log['train_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in train_loss])).item()
+                    wandb.log(wandb_log)
+
                 train_mean_loss.append(mean_train_loss)
                 val_mean_loss.append(mean_val_loss)
                 val_decAccuracies.append(val_decAccuracy)
@@ -236,17 +248,19 @@ def main(config, wandb_upload, dataset, early_stop, lr_decay=0.5):
             dataset_filename = dataset+'_fixed' if fixed and dataset == 'jaulab' else dataset
 
             # Save best final model
-            mdl_name = f'{model}_batch={batch_size}_block={window_len}_lr={lr}'
+            mdl_save_name = f'{model}_batch={batch_size}_block={window_len}_lr={lr}'
             # prefix = model if key == 'population' else subj
             prefix = subj
 
             # Add extensions to the model name depending on the params
-            if preproc_mode is not None: mdl_name += '_' + preproc_mode
-            if eeg_band is not None: mdl_name += '_' + eeg_band
-            if rnd_trials: mdl_name += '_rnd'
-            if hrtf: mdl_name += '_hrtf'
+            if preproc_mode is not None: mdl_save_name += '_' + preproc_mode
+            if eeg_band is not None: mdl_save_name += '_' + eeg_band
+            if loss_mode != 'mean': mdl_save_name += '_' + loss_mode
+            if alpha != 0: mdl_save_name += '_alpha=' + str(alpha)
+            if rnd_trials: mdl_save_name += '_rnd'
+            if hrtf: mdl_save_name += '_hrtf'
         
-            mdl_folder = os.path.join(mdl_save_path, dataset_filename+'_data', mdl_name)
+            mdl_folder = os.path.join(mdl_save_path, dataset_filename+'_data', mdl_save_name)
             if not os.path.exists(mdl_folder):
                 os.makedirs(mdl_folder)
             torch.save(
@@ -255,10 +269,10 @@ def main(config, wandb_upload, dataset, early_stop, lr_decay=0.5):
             )
 
             # Save corresponding train and val metrics
-            val_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'val')
+            val_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_save_name, 'val')
             if not os.path.exists(val_folder):
                 os.makedirs(val_folder)
-            train_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'train')
+            train_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_save_name, 'train')
             if not os.path.exists(train_folder):
                 os.makedirs(train_folder)
             json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
@@ -274,11 +288,11 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/spatial_audio/dnn_models.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/spatial_audio/ild_tunning.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
-    parser.add_argument("--lr_decay", type=float, default=20, help="Scaling factor for the lr finetunning")
+    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--lr_decay", type=float, default=10, help="Scaling factor for the lr finetunning")
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     
     args = parser.parse_args()
@@ -296,4 +310,4 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, not args.max_epoch, args.lr_decay)
+    main(config, wandb_upload, args.dataset, args.key, not args.max_epoch, args.lr_decay)
