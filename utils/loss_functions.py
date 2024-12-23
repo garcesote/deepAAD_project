@@ -100,6 +100,16 @@ class CustomLoss(nn.Module):
             loss = corr_loss + alpha * diff_mse
             return [loss, corr_loss, diff_mse]
         
+        elif self.mode == 'corr_diff_mae':
+            corr = self._compute_correlation(preds, targets, eps=eps)
+            assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
+            diff_pred = preds[0] - preds[1]
+            diff_target = targets[0] - targets[1]
+            diff_mae = torch.mean(torch.abs(diff_pred - diff_target))
+            corr_loss = torch.mean(-corr)
+            loss = corr_loss + alpha * diff_mae
+            return [loss, corr_loss, diff_mae]
+        
         else:
             raise ValueError('Introduce a valid loss')
 

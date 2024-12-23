@@ -83,6 +83,8 @@ def main(config, wandb_upload, dataset, key, early_stop, lr_decay=0.5):
         # Add extensions to the model name depending on the params
         if preproc_mode is not None: mdl_name += '_' + preproc_mode
         if eeg_band is not None: mdl_name += '_' + eeg_band
+        if loss_mode != 'mean': mdl_name += '_' + loss_mode
+        if alpha != 0: mdl_name += '_alpha=' + str(alpha)
         if rnd_trials: mdl_name += '_rnd'
         if hrtf: mdl_name += '_hrtf'
         
