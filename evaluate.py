@@ -48,40 +48,29 @@ def main(config, wandb_upload, dataset, key, finetuned):
 
         window_accuracies = {win//64: None for win in window_list}
 
-        # selected_subjects = get_subjects(dataset)[:5]
-        selected_subjects = [get_subjects(dataset)]
-
-        # Load config
-        ds_config = run['dataset_params']
-        train_params = run['train_params']
-        
-        window_len = ds_config['window_len']
-        window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
-        preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else None
-        data_path = get_data_path(global_data_path, dataset, preproc_mode = preproc_mode)
-        hop = ds_config['hop'] if window_pred else 1
-        leave_one_out = True if key == 'subj_independent' else False
-        data_type = ds_config['data_type'] if 'data_type' in ds_config.keys() else 'mat'
-        eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
-        fixed = ds_config['fixed']
-        rnd_trials = ds_config['rnd_trials']
-        hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
-        time_shift = 100
-        dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
-        lr = float(train_params['lr'])
-        loss_mode = train_params['loss_mode'] if 'loss_mode' in train_params.keys() else 'mean'
-        alpha = train_params['alpha_loss'] if 'alpha_loss' in train_params.keys() else 0
-
-        # LOAD THE DATA
-        test_set = CustomDataset(dataset, data_path, 'test', get_subjects(dataset), window=window_len, hop=hop, data_type=data_type, leave_one_out=leave_one_out, 
-                                fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band=eeg_band)
-
         for eval_window in window_list:
 
+            # Load config
+            ds_config = run['dataset_params']
+            train_params = run['train_params']
+            
+            window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
+            preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else None
+            data_path = get_data_path(global_data_path, dataset, preproc_mode = preproc_mode)
+            window_len = ds_config['window_len'] if not window_pred else eval_window
+            hop = ds_config['hop'] if window_pred else 1
+            leave_one_out = True if key == 'subj_independent' else False
+            data_type = ds_config['data_type'] if 'data_type' in ds_config.keys() else 'mat'
+            eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
+            fixed = ds_config['fixed']
+            rnd_trials = ds_config['rnd_trials']
+            hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
+            time_shift = 100
+            dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
             batch_size =  eval_window if not window_pred else batch_size
-            # window_len = ds_config['window_len'] if not window_pred else eval_window
-
-            test_loader = DataLoader(test_set, batch_size, shuffle=window_pred, pin_memory=True)
+            lr = float(train_params['lr'])
+            loss_mode = train_params['loss_mode'] if 'loss_mode' in train_params.keys() else 'mean'
+            alpha = train_params['alpha_loss'] if 'alpha_loss' in train_params.keys() else 0
 
             # If the loss mode only takes ILD into account and is finetunned, eval with both correlation and ils with alpha=0.1
             if loss_mode in ['ild_mae', 'ild_mse']:
@@ -118,7 +107,9 @@ def main(config, wandb_upload, dataset, key, finetuned):
             dec_results = []
             eval_mean_results = []
             
-            for subj in ['S0']:
+            selected_subjects = get_subjects(dataset)[:5]
+
+            for subj in selected_subjects:
 
                 print(f'Evaluating {model} on window {eval_window//64}s with {dataset_name} dataset for subj {subj}')
             
@@ -148,8 +139,12 @@ def main(config, wandb_upload, dataset, key, finetuned):
 
                 mdl.load_state_dict(torch.load(os.path.join(mdl_folder, mdl_filename), map_location=torch.device(device)))
                 mdl.to(device)
-                mdl.eval()
 
+                # LOAD THE DATA
+                test_set = CustomDataset(dataset, data_path, 'test', subj, window=window_len, hop=hop, data_type=data_type, leave_one_out=leave_one_out, 
+                                        fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band=eeg_band)
+                test_loader = DataLoader(test_set, batch_size, shuffle=window_pred, pin_memory=True)
+                
                 # LOSS FUNCTION
                 criterion = CustomLoss(mode=loss_mode, window_pred=window_pred, alpha_end=alpha)
 
@@ -215,18 +210,18 @@ def main(config, wandb_upload, dataset, key, finetuned):
             str_win = str(eval_window//64)+'s' if 'VLAAI' in model else str(batch_size//64)+'s'
             
             # SAVE RESULTS
-            # if not os.path.exists(dst_save_path):
-            #     os.makedirs(dst_save_path)
-            # filename = str_win+'_Results'
-            # json.dump(eval_results, open(os.path.join(dst_save_path, filename),'w'))
-            # filename = str_win+'_nd_Results'
-            # json.dump(nd_results, open(os.path.join(dst_save_path, filename),'w'))
+            if not os.path.exists(dst_save_path):
+                os.makedirs(dst_save_path)
+            filename = str_win+'_Results'
+            json.dump(eval_results, open(os.path.join(dst_save_path, filename),'w'))
+            filename = str_win+'_nd_Results'
+            json.dump(nd_results, open(os.path.join(dst_save_path, filename),'w'))
 
-            # # SAVE ACCURACY RESULTS
-            # if not os.path.exists(decAcc_save_path):
-            #     os.makedirs(decAcc_save_path)
-            # filename = str_win+'_accuracies'
-            # json.dump(dec_results, open(os.path.join(decAcc_save_path, filename),'w'))
+            # SAVE ACCURACY RESULTS
+            if not os.path.exists(decAcc_save_path):
+                os.makedirs(decAcc_save_path)
+            filename = str_win+'_accuracies'
+            json.dump(dec_results, open(os.path.join(decAcc_save_path, filename),'w'))
 
         # COMPUTE MESD (default values)
         print('Computing MESD')
@@ -248,7 +243,7 @@ def main(config, wandb_upload, dataset, key, finetuned):
             upload_data['subject'] = subj
             if wandb_upload: wandb.log(upload_data)
         if wandb_upload: wandb.log({'mesd_mean': np.mean(mesd_dict['mesd']), 'mesd_median': np.median(mesd_dict['mesd'])})
-        # json.dump(mesd_dict, open(os.path.join(decAcc_save_path, 'mesd'),'w'))
+        json.dump(mesd_dict, open(os.path.join(decAcc_save_path, 'mesd'),'w'))
 
         if wandb_upload: wandb.finish()
 
