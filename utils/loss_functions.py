@@ -31,7 +31,7 @@ class CustomLoss(nn.Module):
         self.adjust_alpha = adjust_alpha
         self.window_pred = window_pred
 
-    def forward(self, preds, targets, eps=1e-8, epoch=0):
+    def forward(self, preds, targets, eps = 1e-8, epoch=0):
 
         assert preds.shape == targets.shape, "Predictions and targets must have same dimensions"
 
@@ -45,12 +45,12 @@ class CustomLoss(nn.Module):
             alpha = self.alpha_end
 
         if self.mode == 'mean':
-            corr = self._compute_correlation(preds, targets, eps=eps)
+            corr = self._compute_correlation(preds, targets, eps)
             loss = torch.mean(-corr)
             return [loss]
         
         elif self.mode == 'ressamble':
-            corr = self._compute_correlation(preds, targets, eps=eps)
+            corr = self._compute_correlation(preds, targets, eps)
             assert preds.shape[0] == 2, "When computing loss on ressamble mode 2 channels must be introduced"
             diff = torch.abs(corr[0] - corr[1])
             corr_loss = torch.mean(-corr)
@@ -75,7 +75,7 @@ class CustomLoss(nn.Module):
             return [ild_mse]
         
         elif self.mode == 'corr_ild_mae':
-            corr = self._compute_correlation(preds, targets, eps=eps)
+            corr = self._compute_correlation(preds, targets, eps)
             assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
             ild_mae = torch.abs(self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets[0], targets[1]))
             corr_loss = torch.mean(-corr)
@@ -83,7 +83,7 @@ class CustomLoss(nn.Module):
             return [loss, corr_loss, ild_mae]
         
         elif self.mode == 'corr_ild_mse':
-            corr = self._compute_correlation(preds, targets, eps=eps)
+            corr = self._compute_correlation(preds, targets, eps)
             assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
             ild_mse = (self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets[0], targets[1]))**2
             corr_loss = torch.mean(-corr)
@@ -91,7 +91,7 @@ class CustomLoss(nn.Module):
             return [loss, corr_loss, ild_mse]
         
         elif self.mode == 'corr_diff_mse':
-            corr = self._compute_correlation(preds, targets, eps=eps)
+            corr = self._compute_correlation(preds, targets, eps)
             assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
             diff_pred = preds[0] - preds[1]
             diff_target = targets[0] - targets[1]
@@ -101,7 +101,7 @@ class CustomLoss(nn.Module):
             return [loss, corr_loss, diff_mse]
         
         elif self.mode == 'corr_diff_mae':
-            corr = self._compute_correlation(preds, targets, eps=eps)
+            corr = self._compute_correlation(preds, targets, eps=1e-8)
             assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
             diff_pred = preds[0] - preds[1]
             diff_target = targets[0] - targets[1]
@@ -113,23 +113,42 @@ class CustomLoss(nn.Module):
         else:
             raise ValueError('Introduce a valid loss')
 
-    # Compute the pearson correlation coefficient
-    def _compute_correlation(self, preds, targets, eps):
-
-        # Compute the correlation for all channels or batches
-        n_stim, n_samples = preds.shape
-        corr = torch.zeros((n_stim, ))
-        for chan, (p, t) in enumerate(zip(preds, targets)):
-            vx = p - torch.mean(p)
-            vy = t - torch.mean(t)
-            corr[chan] = torch.sum(vx * vy) / (torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)) + eps)
-        return corr
+    def _compute_correlation(self, preds, targets, eps=1e-8):
+        """
+        Compute Pearson correlation coefficient for all channels in a batch.
+        Args:
+            preds (torch.Tensor): Predicted values (channels x samples).
+            targets (torch.Tensor): Target values (channels x samples).
+            eps (float): Small value to prevent division by zero.
+        Returns:
+            torch.Tensor: Correlation coefficients for each channel.
+        """
+        # Compute means
+        preds_mean = preds.mean(dim=1, keepdim=True)
+        targets_mean = targets.mean(dim=1, keepdim=True)
+        
+        # Compute deviations
+        preds_dev = preds - preds_mean
+        targets_dev = targets - targets_mean
+        
+        # Compute correlation for all channels simultaneously
+        numerator = (preds_dev * targets_dev).sum(dim=1)
+        denominator = torch.sqrt((preds_dev**2).sum(dim=1) * (targets_dev**2).sum(dim=1)) + eps
+        return numerator / denominator
     
-    # Compute the interaural level difference ILD (dB)
-    def _compute_ild(self, left_channel, right_channel):
-        # Calculate RMS for each channel
-        rms_left = torch.sqrt(torch.mean(left_channel**2))
-        rms_right = torch.sqrt(torch.mean(right_channel**2))
+    def _compute_ild(self, left_channel, right_channel, eps=1e-8):
+        """
+        Compute the interaural level difference (ILD) in dB.
+        Args:
+            left_channel (torch.Tensor): Left channel data (samples,).
+            right_channel (torch.Tensor): Right channel data (samples,).
+            eps (float): Small value to prevent division by zero.
+        Returns:
+            float: ILD in dB.
+        """
+        # Calculate RMS for both channels
+        rms_left = torch.sqrt((left_channel**2).mean()) + eps
+        rms_right = torch.sqrt((right_channel**2).mean()) + eps
+        
         # Calculate ILD in dB
-        ild = 10 * torch.log10(rms_left / rms_right)
-        return ild
+        return 10 * torch.log10(rms_left / rms_right)

@@ -8,20 +8,19 @@ import json
 import argparse
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import classification_report, confusion_matrix
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import numpy as np
 
 from models.dnn import FCNN, CNN
 from utils.datasets import CustomDataset
 from utils.loss_functions import CustomLoss
 from utils.functional import set_seeds, get_subjects, get_channels, get_data_path, get_filename
+from utils.plot_results import plot_clsf_results
 
-def main(config, wandb_upload, dataset, key, finetuned):
+def main(config, wandb_upload, dataset, key, finetuned, save_figures):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
@@ -51,23 +50,32 @@ def main(config, wandb_upload, dataset, key, finetuned):
 
         window_accuracies = {win//64: None for win in window_list}
 
-        for eval_window in window_list:
+        if key == 'population':
+            selected_subj = [get_subjects(dataset)]
+        else:
+            selected_subj = get_subjects(dataset)
 
-            # Load config
-            ds_config = run['dataset_params']
-            train_params = run['train_params']
+        # Load config
+        ds_config = run['dataset_params']
+        train_params = run['train_params']
+        hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
+        window_len = ds_config['window_len']
+        preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else None
+        window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
+        hop = ds_config['hop'] if window_pred else 1
+        data_path = get_data_path(global_data_path, dataset, preproc_mode = preproc_mode)
+        
+        # Load the sets (only for population evaluation)
+        train_set = CustomDataset(dataset, data_path, 'train', get_subjects(dataset), window=window_len, hop=hop, window_pred=window_pred, hrtf=hrtf)
+        test_set = CustomDataset(dataset, data_path, 'test',  get_subjects(dataset), window=window_len, hop=hop, window_pred=window_pred, hrtf=hrtf)
+
+        for eval_window in window_list:
             
-            window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
-            preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else None
-            data_path = get_data_path(global_data_path, dataset, preproc_mode = preproc_mode)
-            window_len = ds_config['window_len']
-            hop = ds_config['hop'] if window_pred else 1
             # leave_one_out = True if key == 'subj_independent' else False
             # data_type = ds_config['data_type'] if 'data_type' in ds_config.keys() else 'mat'
             eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
             fixed = ds_config['fixed']
             rnd_trials = ds_config['rnd_trials']
-            hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
             # dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
             # batch_size =  eval_window if not window_pred else batch_size
             batch_size = eval_window
@@ -88,17 +96,7 @@ def main(config, wandb_upload, dataset, key, finetuned):
             if rnd_trials: mdl_name += '_rnd'
             if hrtf: mdl_name += '_hrtf'
 
-            if finetuned:
-                eval_path, dec_path = 'eval_finetuned_metrics', 'decode_finetuned_accuracy'  
-            else:
-                eval_path, dec_path = 'eval_metrics', 'decode_accuracy'
-
             dataset_name = dataset+'_fixed' if fixed else dataset
-
-            if key == 'population':
-                selected_subj = [get_subjects(dataset)]
-            else:
-                selected_subj = get_subjects(dataset)
 
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -139,7 +137,6 @@ def main(config, wandb_upload, dataset, key, finetuned):
                 # if wandb_upload: wandb.init(project=project, name=exp_name, tags=['finetune'], config=run)
 
                 # LOAD DATA
-                train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, window_pred=False, hrtf=hrtf)
                 train_loader = DataLoader(train_set, batch_size, shuffle= shuffle, pin_memory=True)
                 
                 # COLLECT THE PREDICTIONS OF THE MODEL
@@ -180,7 +177,6 @@ def main(config, wandb_upload, dataset, key, finetuned):
                 spatial_clsf.fit(norm_metrics, labels)
 
                 # EVAL RESULTS
-                test_set = CustomDataset(dataset, data_path, 'test',  subj, window=window_len, hop=hop, window_pred=False, hrtf=hrtf)
                 test_loader = DataLoader(test_set, batch_size = batch_size, shuffle= False, pin_memory=True)
 
                 # COLLECT THE VALIDATION PREDICTIONS OF THE MODEL
@@ -215,7 +211,7 @@ def main(config, wandb_upload, dataset, key, finetuned):
                         if score_a >= score_b:
                             att_correct += 1
 
-                accuracy = att_correct / len(test_loader)
+                accuracy = (att_correct / len(test_loader)) * 100
                 print(f'Accuracy with {batch_size//64}s classifying is {accuracy:.4f}')
 
                 # CONCATENATE AND NORM TO FEED THE CLASSIFIER
@@ -228,114 +224,37 @@ def main(config, wandb_upload, dataset, key, finetuned):
                 norm_metrics = scaler.fit_transform(metrics)
 
                 # EXTRACT THE ATTENDED AND UNATTENDED ACCURACIES
-                projected_data = spatial_clsf.transform(norm_metrics)
                 accuracy_att = spatial_clsf.score(norm_metrics[:len(test_loader)], torch.ones((len(test_loader))))
                 accuracy_unatt = spatial_clsf.score(norm_metrics[len(test_loader):], torch.zeros((len(test_loader))))
-                
-                # Crear el gráfico de barras
-                acc_labels = ['Att_acc', 'Unatt_acc', 'Global_acc']
                 accuracies = [accuracy_att, accuracy_unatt, accuracy]
-                percentages = [acc * 100 for acc in accuracies]
-
-                # SAVE FIGURES
-                # Crear una figura con 3 gráficos en una fila
-                fig, axs = plt.subplots(1, 3, figsize=(18, 4))
-
-                # 1. Gráfico de puntos con frontera de decisión
-                for label, color, marker, class_label in zip([0, 1], ['red', 'blue'], ['o', 's'], ['attended', 'unattended']):
-                    axs[0].scatter(
-                        norm_metrics[labels == label, 0],
-                        norm_metrics[labels == label, 1],
-                        color=color,
-                        label=class_label,
-                        alpha=0.7,
-                        edgecolor='k',
-                        marker=marker
-                    )
-
-                # Calcular el espacio para la frontera de decisión
-                x_min, x_max = norm_metrics[:, 0].min() - 0.1, norm_metrics[:, 0].max() + 0.1
-                y_min, y_max = norm_metrics[:, 1].min() - 0.1, norm_metrics[:, 1].max() + 0.1
-                xx, yy = np.meshgrid(np.linspace(x_min, x_max, 100), np.linspace(y_min, y_max, 100))
-
-                # Generar predicciones para cada punto del grid
-                grid = np.c_[xx.ravel(), yy.ravel()]
-                decision_boundary = spatial_clsf.predict(grid)  # Usar el clasificador entrenado
-                decision_boundary = decision_boundary.reshape(xx.shape)
-
-                # Contorno de la frontera de decisión
-                axs[0].contourf(xx, yy, decision_boundary, levels=[-0.1, 0.5, 1.1], colors=['red', 'blue'], alpha=0.2)
-
-                # Configuración del gráfico
-                axs[0].set_title('2D Visualization with LDA Decision Boundary')
-                axs[0].set_xlabel('Metric 1 (Correlation)')
-                axs[0].set_ylabel('Metric 2 (MAE Diff)')
-                axs[0].legend()
-                axs[0].grid(True)
-
-                # 2. Histograma de la proyección LDA
-                for label, color, class_label in zip([0, 1], ['red', 'blue'], ['attended', 'unattended']):
-                    axs[1].hist(
-                        projected_data[labels == label],
-                        bins=20,
-                        alpha=0.6,
-                        color=color,
-                        label=class_label
-                    )
-                axs[1].set_title('LDA Projection')
-                axs[1].set_xlabel('Discriminant Component')
-                axs[1].set_ylabel('Frequency')
-                axs[1].legend()
-                axs[1].grid(True)
-
-                # 3. Gráfico de barras horizontal
-                colors = cm.plasma([0.2, 0.5, 0.8])
-                axs[2].barh(acc_labels, percentages, color=colors, alpha=0.7)
-                for i, valor in enumerate(percentages):
-                    axs[2].text(valor + 2, i, f'{valor:.2f}%', va='center', fontsize=10)
-                axs[2].set_title(f'LDA Accuracies')
-                axs[2].set_xlim(0, 100)
-                axs[2].grid(axis='x', linestyle='--', alpha=0.6)
-                axs[2].axes.get_xaxis().set_visible(False)
-
-                # Ajustar diseño
-                plt.tight_layout()
-                plt.title(f'Resultados clasificación LDA con ventana de {batch_size//64}s')
-
+                
                 # Save the window results to compute mesd
-                window_accuracies[eval_window//64] = accuracy
-
-                save_figures_path = os.path.join(global_path, 'figures', project, 'LDA_Classifiers')
-                if not os.path.exists(save_figures_path):
-                    os.makedirs(save_figures_path)
-
-                plt.savefig(os.path.join(save_figures_path, mdl_name + f'_{eval_window//64}s.png'))
+                window_accuracies[eval_window//64] = accuracy                
 
                 # LOG RESULTS
-                wandb_log = {'window': eval_window, 'accuracy': accuracy, 'accuracy_att': accuracy_att, 'accuracy_unattended': accuracy_att}
+                wandb_log = {'window': eval_window, 'accuracy': accuracy, 'accuracy_att': accuracy_att, 'accuracy_unattended': accuracy_unatt}
                 if wandb_upload: wandb.log(wandb_log)
-        
+
+                # SAVE FIGURES
+                if save_figures:
+                    save_figures_path = os.path.join(global_path, 'figures', project, 'LDA_Classifiers', mdl_name)
+                    plot_clsf_results(spatial_clsf, norm_metrics, labels, eval_window, accuracies, save_figures_path)
+
         # COMPUTE MESD (default values)
-        # print('Computing MESD')
-        # mesd_dict = {'mesd': [], 'N_mesd': [], 'tau_mesd': [], 'p_mesd': []}
-        # for subj in range(len(selected_subjects)):
-        #     tau = np.array(list(window_accuracies.keys()))
-        #     p = np.array([results[subj] / 100 for results in window_accuracies.values()])
-        #     if np.any(p > 0.5):
-        #         mesd, N_mesd, tau_mesd, p_mesd = compute_MESD(tau,p)
-        #         print(f"For subject {subj} the minimal expected switch duration is MESD = {mesd} \nat an otpimal working point of (tau, p) = ({tau_mesd}, {p_mesd}) \nwith N = {N_mesd} states in the Markov chain.")
-        #     else:
-        #         mesd, N_mesd, tau_mesd, p_mesd = 0, 0, 0, 0
-        #         print(f"For subject {subj} the MESD could not be computed")
-        #     mesd_results = [mesd, N_mesd, tau_mesd, p_mesd]
-        #     for idx, value in zip(list(mesd_dict.keys()), mesd_results):
-        #         mesd_dict[idx].append(value)
-        #     # Wandb upload with the specific info of the specific subject
-        #     upload_data = {idx: value[subj] for idx, value in mesd_dict.items()}
-        #     upload_data['subject'] = subj
-        #     if wandb_upload: wandb.log(upload_data)
-        # if wandb_upload: wandb.log({'mesd_mean': np.mean(mesd_dict['mesd']), 'mesd_median': np.median(mesd_dict['mesd'])})
-        # json.dump(mesd_dict, open(os.path.join(decAcc_save_path, 'mesd'),'w'))
+        print('Computing MESD')
+        mesd_dict = {'mesd': None, 'N_mesd': None, 'tau_mesd': None, 'p_mesd': None}
+        tau = np.array(list(window_accuracies.keys()))
+        p = np.array([results / 100 for results in window_accuracies.values()])
+        if np.any(p > 0.5):
+            mesd, N_mesd, tau_mesd, p_mesd = compute_MESD(tau,p)
+            print(f"The minimal expected switch duration is MESD = {mesd} \nat an otpimal working point of (tau, p) = ({tau_mesd}, {p_mesd}) \nwith N = {N_mesd} states in the Markov chain.")
+        else:
+            mesd, N_mesd, tau_mesd, p_mesd = 0, 0, 0, 0
+            print(f"The MESD could not be computed")
+        mesd_results = [mesd, N_mesd, tau_mesd, p_mesd]
+        for idx, value in zip(list(mesd_dict.keys()), mesd_results):
+            mesd_dict[idx] = value
+        if wandb_upload: wandb.log(mesd_dict)
 
         if wandb_upload: wandb.finish()
 
@@ -348,6 +267,7 @@ if __name__ == "__main__":
     # Add config argument
     parser.add_argument("--config", type=str, default='configs/spatial_audio/ild_criterion.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
+    parser.add_argument("--figure", action='store_true', help="When included generate and save the figures of the classifier")    
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--finetuned", action='store_true', help="When included search for the model on the finetune folder")
@@ -357,8 +277,8 @@ if __name__ == "__main__":
     wandb_upload = args.wandb
 
     # Introduce path to the mesd-toolbox
-    # sys.path.append(r"C:\Users\jaulab\Desktop\AAD\mesd-toolbox\mesd-toolbox-python")
-    # from mesd_toolbox import compute_MESD
+    sys.path.append(r"C:\Users\jaulab\Desktop\AAD\mesd-toolbox\mesd-toolbox-python")
+    from mesd_toolbox import compute_MESD
     
     # Upload results to wandb
     if wandb_upload:
@@ -369,5 +289,5 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, args.key, args.finetuned)
+    main(config, wandb_upload, args.dataset, args.key, args.finetuned, args.figure)
             
