@@ -49,7 +49,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
     # Config loss
     loss_params = run['loss_params']
     run['loss_params']['alpha_end'] = wandb.config.alpha_loss
-    loss_mode = loss_params.get('loss_mode', 'mean')
+    loss_mode = loss_params.get('mode', 'mean')
     
     data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
 
