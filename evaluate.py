@@ -65,6 +65,7 @@ def main(config, wandb_upload, dataset, key, finetuned):
             fixed = ds_config['fixed']
             rnd_trials = ds_config['rnd_trials']
             hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
+            norm_hrtf_diff = ds_config['norm_hrtf_diff'] if 'norm_hrtf_diff' in ds_config.keys() else False
             time_shift = 100
             dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
             batch_size =  eval_window if not window_pred else batch_size
@@ -92,6 +93,7 @@ def main(config, wandb_upload, dataset, key, finetuned):
             if alpha != 0: mdl_name += '_alpha=' + str(alpha)
             if rnd_trials: mdl_name += '_rnd'
             if hrtf: mdl_name += '_hrtf'
+            if norm_hrtf_diff: mdl_name += '_norm'
 
             if finetuned:
                 eval_path, dec_path = 'eval_finetuned_metrics', 'decode_finetuned_accuracy'  
@@ -107,7 +109,7 @@ def main(config, wandb_upload, dataset, key, finetuned):
             dec_results = []
             eval_mean_results = []
             
-            selected_subjects = get_subjects(dataset)[:5]
+            selected_subjects = get_subjects(dataset)
 
             for subj in selected_subjects:
 
@@ -257,7 +259,7 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, default='configs/spatial_audio/ild_tunning.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--finetuned", action='store_true', help="When included search for the model on the finetune folder")
 
     args = parser.parse_args()

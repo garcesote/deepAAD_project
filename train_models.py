@@ -59,6 +59,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         fixed = ds_config['fixed']
         rnd_trials = ds_config['rnd_trials']
         hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
+        norm_hrtf_diff = ds_config['norm_hrtf_diff'] if 'norm_hrtf_diff' in ds_config.keys() else False
         window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
         val_hop = ds_config['hop'] if window_pred else 1
@@ -72,7 +73,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         if key == 'population':
             selected_subj = [get_subjects(dataset)]
         else:
-            selected_subj = get_subjects(dataset)[:5]
+            selected_subj = get_subjects(dataset)
 
         for subj in selected_subj:
             
@@ -120,9 +121,9 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
 
             # LOAD THE DATA
             train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, data_type=data_type, leave_one_out=leave_one_out,  
-                                       fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band=eeg_band)
+                                       fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, norm_hrtf_diff=norm_hrtf_diff, eeg_band=eeg_band)
             val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=val_hop, data_type=data_type, leave_one_out=leave_one_out, 
-                                    fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band = eeg_band)
+                                    fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, norm_hrtf_diff=norm_hrtf_diff, eeg_band = eeg_band)
             
             train_loader = DataLoader(train_set, batch_size, shuffle = shuffle, pin_memory=True)
             val_loader = DataLoader(val_set, batch_size, shuffle = window_pred, pin_memory=True)
@@ -248,6 +249,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                 if alpha != 0: mdl_name += '_alpha=' + str(alpha)
                 if rnd_trials: mdl_name += '_rnd'
                 if hrtf: mdl_name += '_hrtf'
+                if norm_hrtf_diff: mdl_name += '_norm'
             
                 mdl_folder = os.path.join(mdl_save_path, dataset_filename+'_data', mdl_name)
                 if not os.path.exists(mdl_folder):
@@ -277,14 +279,14 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/spatial_audio/diff_mse_criterion.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/spatial_audio/spatial_only.yaml", help="Ruta al archivo config")
     # parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='subj_s', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
 

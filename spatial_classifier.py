@@ -59,6 +59,7 @@ def main(config, wandb_upload, dataset, key, finetuned, save_figures):
         ds_config = run['dataset_params']
         train_params = run['train_params']
         hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
+        norm_hrtf_diff = ds_config['norm_hrtf_diff'] if 'norm_hrtf_diff' in ds_config.keys() else False
         window_len = ds_config['window_len']
         preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else None
         window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']

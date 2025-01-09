@@ -63,6 +63,7 @@ def main(config, wandb_upload, dataset, key, early_stop, lr_decay=0.5):
         fixed = ds_config['fixed']
         rnd_trials = ds_config['rnd_trials']
         hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
+        norm_hrtf_diff = ds_config['norm_hrtf_diff'] if 'norm_hrtf_diff' in ds_config.keys() else False
         window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
         dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
         val_hop = ds_config['hop'] if window_pred else 1

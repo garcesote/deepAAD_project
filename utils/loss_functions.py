@@ -19,7 +19,6 @@ class CustomLoss(nn.Module):
 
     adjust_alpha: bool
 
-
     """
 
     def __init__(self, mode = 'mean', window_pred = False, adjust_alpha = False, alpha_start = 0, alpha_end = 1, total_epoch=20):
@@ -31,7 +30,7 @@ class CustomLoss(nn.Module):
         self.adjust_alpha = adjust_alpha
         self.window_pred = window_pred
 
-    def forward(self, preds, targets, eps = 1e-8, epoch=0):
+    def forward(self, preds, targets, norm_diff=None, eps = 1e-8, epoch=0):
 
         assert preds.shape == targets.shape, "Predictions and targets must have same dimensions"
 
@@ -68,10 +67,22 @@ class CustomLoss(nn.Module):
             return [ild_mse]
         
         elif self.mode == 'diff_mse':
-            assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
+            assert preds.shape[0] == 2, "When computing loss on differnce mode 2 channels must be introduced"
             diff_pred = preds[0] - preds[1]
             diff_target = targets[0] - targets[1]
             diff_mse = torch.mean((diff_pred - diff_target)**2)
+            return [diff_mse]
+        
+        elif self.mode == 'pred_diff_mse':
+            assert preds.shape[0] == 1, "When computing loss on ild mode 2 channels must be introduced"
+            diff_pred = preds[0]
+            diff_target = targets[0] - targets[1]
+            diff_mse = torch.mean((diff_pred - diff_target)**2) #mse
+            return [diff_mse]
+        
+        elif self.mode == 'ild_mse':
+            assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
+            ild_mse = (self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets[0], targets[1]))**2
             return [ild_mse]
         
         elif self.mode == 'corr_ild_mae':
@@ -79,7 +90,7 @@ class CustomLoss(nn.Module):
             assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
             ild_mae = torch.abs(self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets[0], targets[1]))
             corr_loss = torch.mean(-corr)
-            loss = corr_loss + alpha * ild_mae
+            loss = (1 - alpha) * corr_loss + alpha * ild_mae
             return [loss, corr_loss, ild_mae]
         
         elif self.mode == 'corr_ild_mse':
@@ -87,7 +98,7 @@ class CustomLoss(nn.Module):
             assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
             ild_mse = (self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets[0], targets[1]))**2
             corr_loss = torch.mean(-corr)
-            loss = corr_loss + alpha * ild_mse
+            loss = (1 - alpha) * corr_loss + alpha * ild_mse
             return [loss, corr_loss, ild_mse]
         
         elif self.mode == 'corr_diff_mse':
@@ -97,7 +108,7 @@ class CustomLoss(nn.Module):
             diff_target = targets[0] - targets[1]
             diff_mse = torch.mean((diff_pred - diff_target)**2)
             corr_loss = torch.mean(-corr)
-            loss = corr_loss + alpha * diff_mse
+            loss = (1 - alpha) * corr_loss + alpha * diff_mse
             return [loss, corr_loss, diff_mse]
         
         elif self.mode == 'corr_diff_mae':
@@ -107,7 +118,7 @@ class CustomLoss(nn.Module):
             diff_target = targets[0] - targets[1]
             diff_mae = torch.mean(torch.abs(diff_pred - diff_target))
             corr_loss = torch.mean(-corr)
-            loss = corr_loss + alpha * diff_mae
+            loss = (1 - alpha) * corr_loss + alpha * diff_mae
             return [loss, corr_loss, diff_mae]
         
         else:

@@ -4,7 +4,8 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 from utils.functional import get_other_subjects, get_trials, get_leave_one_out_trials, normalize_eeg, get_data_path, get_SKL_subj_idx
-import gc 
+import gc
+from sklearn.preprocessing import MinMaxScaler 
 
 class CustomDataset(Dataset):
 
@@ -69,7 +70,7 @@ class CustomDataset(Dataset):
     def __init__(self, dataset, data_path, split, subjects, window, hop, 
                  norm_stim=False, data_type = 'mat', leave_one_out = False,
                  fixed=False, rnd_trials=False, window_pred=True, hrtf=False,
-                 eeg_band= None):
+                 norm_hrtf_diff=False, eeg_band= None):
 
         if not isinstance(subjects, list):
             subjects = [subjects]
@@ -96,10 +97,11 @@ class CustomDataset(Dataset):
         self.leave_one_out = leave_one_out
         self.window_pred = window_pred
         self.hrtf = hrtf
+        self.norm_hrtf_diff = norm_hrtf_diff
         self.eeg_band = eeg_band
 
         if dataset == 'fulsang':
-            self.eeg, self.stima, self.stimb = self.get_Fulsang_data()
+            self.eeg, self.stima, self.stimb, self.stima_diff, self.stimb_diff = self.get_Fulsang_data()
         elif dataset == 'jaulab':
             self.eeg, self.stima, self.stimb = self.get_Jaulab_data()
         elif dataset == 'skl':
@@ -112,12 +114,13 @@ class CustomDataset(Dataset):
         self.n_samples = self.eeg.shape[1]
 
     def get_Fulsang_data(self):
-
-        eeg = []
-        stima = []
-        stimb = []
-
-        n_trials = 60 # 60 trials of 50s per subject in Fulsang dataset
+        
+        # Fulsang dataset with 60 trials of 50s with 64 desired channels
+        n_trials = 60
+        trial_len = 3200
+        eeg_chan = 64
+        stim_chan = 2 if self.hrtf else 1
+        
         if not self.leave_one_out:
             trials = get_trials(self.split, n_trials, shuffle=self.rnd_trials, fixed=False, dataset= self.dataset)
         else:
@@ -125,64 +128,85 @@ class CustomDataset(Dataset):
 
         self.trials = trials
         self.n_trials = len(trials)
+        
+        # Data matrices with shapes (subj, trial, T, C)
+        eeg = torch.zeros((len(self.subjects), self.n_trials, trial_len, eeg_chan))
+        stima = torch.zeros((len(self.subjects), self.n_trials, trial_len, stim_chan))
+        stimb = torch.zeros((len(self.subjects), self.n_trials, trial_len, stim_chan))
+        stima_diff = torch.zeros((len(self.subjects), self.n_trials, trial_len, 1)) if self.hrtf else None
+        stimb_diff = torch.zeros((len(self.subjects), self.n_trials, trial_len, 1)) if self.hrtf else None
 
-        for subject in self.subjects:
+        for n, subject in enumerate(self.subjects):
 
             if self.data_type == 'mat': 
 
                 # Load the eeg data
                 preproc_data = scipy.io.loadmat(os.path.join(self.data_path ,subject + '_data_preproc.mat'))
-                eeg_data = preproc_data['data']['eeg'][0,0][0,trials]
                 self.chan_idx = preproc_data['data']['dim'][0,0][0,0]['chan']['eeg'][0,0][0,0]
                 self.chan_idx = np.array([chan[0] for chan in self.chan_idx[0]])
-                # Select the 64 first eeg channels
-                if eeg_data[0].shape[1] > 64:
-                    eeg_data = [trial[:,:64] for trial in eeg_data]
-                    self.chan_idx = self.chan_idx[:64]
                 
                 # Load mono stim data
                 if not self.hrtf:
-                    stima_data = preproc_data['data']['wavA'][0,0][0,trials]
-                    stimb_data = preproc_data['data']['wavB'][0,0][0,trials]
+
+                    for t, trial in enumerate(trials):
+
+                        eeg[n, t] = torch.tensor(preproc_data['data']['eeg'][0,0][0,trial][:, :64]) # Only select the first 64 channels
+                        stima[n, t] = torch.tensor(preproc_data['data']['wavA'][0,0][0,trial])
+                        stimb[n, t] = torch.tensor(preproc_data['data']['wavB'][0,0][0,trial])
                 
-                # Load HRTF stim data, the folder containing HRTF info. must be on the parent data_path dir
+                # Load HRTF stim data, the folder containing HRTF info. must be on the parent data_path dir (if not specify it)
                 else:
+
                     parent_dir = os.path.dirname(self.data_path)
                     hrtfs_path = os.path.join(parent_dir, 'HRTFs')
                     hrtfs_data = scipy.io.loadmat(os.path.join(hrtfs_path ,subject + '_hrtfs.mat'))
 
-                    stima_data = [hrtfs_data['wavs'][:,0][trial]['wavA'][0,0] for trial in trials]
-                    stimb_data = [hrtfs_data['wavs'][:,0][trial]['wavB'][0,0] for trial in trials]
-                
-                # Concatenate the trials on the temporal dim
-                eeg_data = torch.hstack([normalize_eeg(torch.tensor(eeg_data[trial]).T) for trial in range(self.n_trials)])
-                stima_data = torch.vstack([torch.tensor(stima_data[trial]) for trial in range(self.n_trials)]).T
-                stimb_data = torch.vstack([torch.tensor(stimb_data[trial]) for trial in range(self.n_trials)]).T
+                    for t, trial in enumerate(trials):
+
+                        eeg[n, t] = torch.tensor(preproc_data['data']['eeg'][0,0][0,trial][:, :64]) # Only select the first 64 channels
+                        stima[n, t] = torch.tensor(hrtfs_data['wavs'][:,0][trial]['wavA'][0, 0])
+                        stimb[n, t] = torch.tensor(hrtfs_data['wavs'][:,0][trial]['wavB'][0, 0])
+
+                        # HRTFs channel difference
+                        stima_diff[n, t] = (stima[n, t, :, 0] - stima[n, t, :, 1]).unsqueeze(1)
+                        stimb_diff[n, t] = (stimb[n, t, :, 0] - stimb[n, t, :, 1]).unsqueeze(1)
+
+                        # Scale the channels according to the normalization between -1 and 1 of the differences
+                        if self.norm_hrtf_diff: 
+                            # Fit scaler
+                            scaler = MinMaxScaler((-1, 1))
+                            stim_cat = torch.cat((stima_diff[n, t], stimb_diff[n, t]))
+                            norm_stim_cat = torch.tensor(scaler.fit_transform(stim_cat))
+                            # Scale the original channels
+                            stim_cat = torch.cat((stima[n, t, :, 0], stimb[n, t, :, 0]))
+                            stim_cat = torch.cat((stima[n, t, :, 0], stimb[n, t, :, 0]))
+                            stima[n, t, :, 0], stima[n, t, :, 1] = torch.tensor(scaler.transform(stima[n, t, :, 0].unsqueeze(1)))[:, 0], torch.tensor(scaler.transform(stima[n, t, :, 1].unsqueeze(1)))[:, 0]
+                            stimb[n, t, :, 0], stimb[n, t, :, 1] = torch.tensor(scaler.transform(stimb[n, t, :, 0].unsqueeze(1)))[:, 0], torch.tensor(scaler.transform(stimb[n, t, :, 1].unsqueeze(1)))[:, 0]
+                            stima_diff[n, t], stimb_diff[n, t] = norm_stim_cat[:trial_len], norm_stim_cat[trial_len:]
                 
             elif self.data_type == 'npy':
                 folder_name = 'eeg' if self.eeg_band is None else 'eeg_band_' + self.eeg_band
-                eeg_data = np.load(os.path.join(self.data_path, folder_name, subject+'_eeg.npy'), allow_pickle=True)[trials]
-                stima_data = torch.tensor(np.load(os.path.join(self.data_path, 'stim', subject+'_stima.npy'), allow_pickle=True)[trials])
-                stimb_data = torch.tensor(np.load(os.path.join(self.data_path, 'stim', subject+'_stimb.npy'), allow_pickle=True)[trials])
+                eeg[n] = torch.tensor(np.load(os.path.join(self.data_path, folder_name, subject+'_eeg.npy'), allow_pickle=True)[trials]).permute(0, 2, 1)
+                stima[n] = torch.tensor(np.load(os.path.join(self.data_path, 'stim', subject+'_stima.npy'), allow_pickle=True)[trials]).unsqueeze(2)
+                stimb[n] = torch.tensor(np.load(os.path.join(self.data_path, 'stim', subject+'_stimb.npy'), allow_pickle=True)[trials]).unsqueeze(2)
                 self.chan_idx = None
 
                 # Aplanar el tensor por trials (chan, trials*samples) y (trials*samples) 
                 # BUG: Hacerlo descomponiendo el vector y utilizando hstack en vez de view como para archivo .mat
                 # eeg_data = eeg_data.view(eeg_data.shape[1], eeg_data.shape[0] * eeg_data.shape[2])
-                eeg_data = torch.hstack([torch.tensor(eeg_data[trial]) for trial in range(self.n_trials)])
-                stima_data = stima_data.view(-1)
-                stimb_data = stimb_data.view(-1)
+                # eeg[n] = torch.hstack([torch.tensor(eeg[n][trial]) for trial in range(self.n_trials)])
+                # stima[n] = stima[n].view(-1)
+                # stimb[n] = stimb[n].view(-1)
 
             else:
                 raise ValueError('Data type value has to be npy or mat')
-            
-            eeg.append(eeg_data)
-            stima.append(stima_data)
-            stimb.append(stimb_data)
 
-        # Concateno en un tensor global la información de los SUJETOS INDICADOS
-        return torch.hstack(eeg), torch.hstack(stima), torch.hstack(stimb)
-
+        # Return one big matrix with the concatenated info (subj * trial * T, C)
+        if self.hrtf:
+            return eeg.reshape(-1, eeg_chan).T, stima.reshape(-1, stim_chan).T, stimb.reshape(-1, stim_chan).T, stima_diff.reshape(-1, 1).T, stimb_diff.reshape(-1, 1).T
+        else:
+            return eeg.reshape(-1, eeg_chan).T, stima.reshape(-1, stim_chan).T, stimb.reshape(-1, stim_chan).T, None, None
+        
     def get_SKL_data(self):
     
         eeg = []
@@ -301,7 +325,6 @@ class CustomDataset(Dataset):
     
     def __len__(self):
         return (self.n_samples - self.window) // self.hop
-    
 
     def __getitem__(self, idx):
 
@@ -312,6 +335,8 @@ class CustomDataset(Dataset):
         stima = self.stima[:, start] if not self.window_pred else self.stima[0, start:end]
         if self.dataset != 'skl':
             stimb = self.stimb[:, start] if not self.window_pred else self.stimb[0, start:end]
-            return {'eeg':eeg, 'stima':stima, 'stimb':stimb}
+            stima_diff = self.stima_diff[:, start] if not self.window_pred else self.stima_diff[0, start:end]
+            stimb_diff = self.stimb_diff[:, start] if not self.window_pred else self.stimb_diff[0, start:end]
+            return {'eeg':eeg, 'stima':stima, 'stimb':stimb, 'stima_diff':stima_diff, 'stimb_diff':stimb_diff}
         else:
             return {'eeg':eeg, 'stima':stima}
