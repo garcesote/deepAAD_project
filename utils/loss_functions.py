@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class CustomLoss(nn.Module):
 
@@ -32,7 +33,7 @@ class CustomLoss(nn.Module):
 
     def forward(self, preds, targets, norm_diff=None, eps = 1e-8, epoch=0):
 
-        assert preds.shape == targets.shape, "Predictions and targets must have same dimensions"
+        # assert preds.shape == targets.shape, "Predictions and targets must have same dimensions"
 
         if not self.window_pred:
             preds, targets = preds.T, targets.T # (n_stim, n_samples)
@@ -74,11 +75,16 @@ class CustomLoss(nn.Module):
             return [diff_mse]
         
         elif self.mode == 'pred_diff_mse':
-            assert preds.shape[0] == 1, "When computing loss on ild mode 2 channels must be introduced"
+            assert preds.shape[0] == 1, "When computing loss when predicting diff only 1 channel"
             diff_pred = preds[0]
             diff_target = targets[0] - targets[1]
             diff_mse = torch.mean((diff_pred - diff_target)**2) #mse
             return [diff_mse]
+        
+        elif self.mode == 'pred_ild_mse': # extract the mean_value
+            assert preds.shape[0] == 1, "When computing loss when predicting diff only 1 channel"
+            ild_mse = (torch.mean(preds[0]) - self._compute_ild(targets[0], targets[1]))**2
+            return [ild_mse]
         
         elif self.mode == 'ild_mse':
             assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
@@ -120,6 +126,11 @@ class CustomLoss(nn.Module):
             corr_loss = torch.mean(-corr)
             loss = (1 - alpha) * corr_loss + alpha * diff_mae
             return [loss, corr_loss, diff_mae]
+        
+        elif self.mode == 'spatial_locus':
+            # Use the BCE with logits to convert scalar CNN outputs into 
+            loss = F.binary_cross_entropy_with_logits(preds, targets)
+            return [loss]
         
         else:
             raise ValueError('Introduce a valid loss')

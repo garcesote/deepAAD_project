@@ -20,13 +20,13 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
 
     # Global params
     model = run['model']
-    exp_name = config['exp_name'] + '_' + str(run['loss_params']['alpha_end'])
+    exp_name = config['exp_name']
 
     wandb.init(config=config)
 
     # Config training
     train_params = run['train_params']
-    lr = wandb.config.lr
+    lr = float(wandb.config.lr)
     batch_size = wandb.config.batch_size
     max_epoch = train_params['max_epoch']
     weight_decay = float(train_params['weight_decay'])
@@ -43,12 +43,11 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
     run['model_params']['dropout'] = wandb.config.dropout
     run['model_params']['input_samples'] = wandb.config.window
     run['model_params']['F1'] = wandb.config.F1
-    run['model_params']['F2'] = wandb.config.F2
-    run['model_params']['AP1'] = wandb.config.AP1
+    run['model_params']['D'] = wandb.config.D
 
     # Config loss
     loss_params = run['loss_params']
-    run['loss_params']['alpha_end'] = wandb.config.alpha_loss
+    # run['loss_params']['alpha_end'] = wandb.config.alpha_loss
     loss_mode = loss_params.get('mode', 'mean')
     
     data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
@@ -161,8 +160,8 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
                 # Append neg. loss corresponding to the coef. Pearson
                 train_loss.append(loss_list)
 
-                # Actualize the state of the train loss
-                train_loader_tqdm.set_postfix({'train_loss': loss})
+                # Update the state of the train loss
+                train_loader_tqdm.set_postfix({'train_loss': loss.item()})
 
             mdl.eval()
             val_loss = []
@@ -229,7 +228,7 @@ def main(config, dataset, key):
 
 if __name__ == "__main__":
 
-    config_path = 'configs/spatial_audio/sweep_config.yaml'
+    config_path = 'configs/spatial_audio/spatial_locus_sweep.yaml'
     dataset = 'fulsang'
     key = 'population'
 

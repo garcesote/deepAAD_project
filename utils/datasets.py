@@ -5,7 +5,8 @@ import numpy as np
 from torch.utils.data import Dataset
 from utils.functional import get_other_subjects, get_trials, get_leave_one_out_trials, normalize_eeg, get_data_path, get_SKL_subj_idx
 import gc
-from sklearn.preprocessing import MinMaxScaler 
+from sklearn.preprocessing import MinMaxScaler
+import pandas as pd
 
 class CustomDataset(Dataset):
 
@@ -70,7 +71,7 @@ class CustomDataset(Dataset):
     def __init__(self, dataset, data_path, split, subjects, window, hop, 
                  norm_stim=False, data_type = 'mat', leave_one_out = False,
                  fixed=False, rnd_trials=False, window_pred=True, hrtf=False,
-                 norm_hrtf_diff=False, eeg_band= None):
+                 norm_hrtf_diff=False, eeg_band= None, spatial_locus=False):
 
         if not isinstance(subjects, list):
             subjects = [subjects]
@@ -99,9 +100,10 @@ class CustomDataset(Dataset):
         self.hrtf = hrtf
         self.norm_hrtf_diff = norm_hrtf_diff
         self.eeg_band = eeg_band
+        self.spatial_locus = spatial_locus
 
         if dataset == 'fulsang':
-            self.eeg, self.stima, self.stimb, self.stima_diff, self.stimb_diff = self.get_Fulsang_data()
+            self.eeg, self.stima, self.stimb = self.get_Fulsang_data()
         elif dataset == 'jaulab':
             self.eeg, self.stima, self.stimb = self.get_Jaulab_data()
         elif dataset == 'skl':
@@ -145,18 +147,10 @@ class CustomDataset(Dataset):
                 self.chan_idx = preproc_data['data']['dim'][0,0][0,0]['chan']['eeg'][0,0][0,0]
                 self.chan_idx = np.array([chan[0] for chan in self.chan_idx[0]])
                 
-                # Load mono stim data
-                if not self.hrtf:
-
-                    for t, trial in enumerate(trials):
-
-                        eeg[n, t] = torch.tensor(preproc_data['data']['eeg'][0,0][0,trial][:, :64]) # Only select the first 64 channels
-                        stima[n, t] = torch.tensor(preproc_data['data']['wavA'][0,0][0,trial])
-                        stimb[n, t] = torch.tensor(preproc_data['data']['wavB'][0,0][0,trial])
-                
-                # Load HRTF stim data, the folder containing HRTF info. must be on the parent data_path dir (if not specify it)
-                else:
-
+                # Load hrtf data where 2 stim channels are provided
+                if self.hrtf:
+                    
+                    # Load HRTF stim data, the folder containing HRTF info. must be on the parent data_path dir (if not specify it)
                     parent_dir = os.path.dirname(self.data_path)
                     hrtfs_path = os.path.join(parent_dir, 'HRTFs')
                     hrtfs_data = scipy.io.loadmat(os.path.join(hrtfs_path ,subject + '_hrtfs.mat'))
@@ -173,10 +167,12 @@ class CustomDataset(Dataset):
 
                         # Scale the channels according to the normalization between -1 and 1 of the differences
                         if self.norm_hrtf_diff: 
+
                             # Fit scaler
                             scaler = MinMaxScaler((-1, 1))
                             stim_cat = torch.cat((stima_diff[n, t], stimb_diff[n, t]))
                             norm_stim_cat = torch.tensor(scaler.fit_transform(stim_cat))
+
                             # Scale the original channels
                             stim_cat = torch.cat((stima[n, t, :, 0], stimb[n, t, :, 0]))
                             stim_cat = torch.cat((stima[n, t, :, 0], stimb[n, t, :, 0]))
@@ -184,7 +180,39 @@ class CustomDataset(Dataset):
                             stimb[n, t, :, 0], stimb[n, t, :, 1] = torch.tensor(scaler.transform(stimb[n, t, :, 0].unsqueeze(1)))[:, 0], torch.tensor(scaler.transform(stimb[n, t, :, 1].unsqueeze(1)))[:, 0]
                             stima_diff[n, t], stimb_diff[n, t] = norm_stim_cat[:trial_len], norm_stim_cat[trial_len:]
                 
+                # Load spatial data: 0 or 1 depending on the attended direction
+                elif self.spatial_locus:
+                    
+                    # Load the attended directions from the expinfo.csv that it's located on a forder named Expinfo on the parent folder
+                    parent_dir = os.path.dirname(self.data_path)
+                    expinfo_path = os.path.join(parent_dir, 'Expinfo')
+                    expinfo_path = os.path.join(expinfo_path ,'expinfo_' + subject + '.csv')
+                    expinfo = pd.read_csv(expinfo_path)
+                    # Filter out the trials with a single speaker
+                    expinfo = expinfo[expinfo['n_speakers'] == 2]
+
+                    for t, trial in enumerate(trials):
+
+                        eeg[n, t] = torch.tensor(preproc_data['data']['eeg'][0,0][0,trial][:, :64]) # Only select the first 64 channels
+                        # attended_lr csv file with values 1 for left attention and 2 for right attention
+                        attended_lr = expinfo.iloc[t].attend_lr
+                        # If attended right insert ones if not the tensor alrady filled with 0s
+                        if attended_lr == 2:
+                            stima[n, t] = torch.ones((trial_len, 1))
+                        else:
+                            stimb[n, t] = torch.ones((trial_len, 1))
+                    
+                # Load mono stim data
+                else:
+
+                    for t, trial in enumerate(trials):
+
+                        eeg[n, t] = torch.tensor(preproc_data['data']['eeg'][0,0][0,trial][:, :64]) # Only select the first 64 channels
+                        stima[n, t] = torch.tensor(preproc_data['data']['wavA'][0,0][0,trial])
+                        stimb[n, t] = torch.tensor(preproc_data['data']['wavB'][0,0][0,trial])
+                
             elif self.data_type == 'npy':
+
                 folder_name = 'eeg' if self.eeg_band is None else 'eeg_band_' + self.eeg_band
                 eeg[n] = torch.tensor(np.load(os.path.join(self.data_path, folder_name, subject+'_eeg.npy'), allow_pickle=True)[trials]).permute(0, 2, 1)
                 stima[n] = torch.tensor(np.load(os.path.join(self.data_path, 'stim', subject+'_stima.npy'), allow_pickle=True)[trials]).unsqueeze(2)
@@ -202,10 +230,7 @@ class CustomDataset(Dataset):
                 raise ValueError('Data type value has to be npy or mat')
 
         # Return one big matrix with the concatenated info (subj * trial * T, C)
-        if self.hrtf:
-            return eeg.reshape(-1, eeg_chan).T, stima.reshape(-1, stim_chan).T, stimb.reshape(-1, stim_chan).T, stima_diff.reshape(-1, 1).T, stimb_diff.reshape(-1, 1).T
-        else:
-            return eeg.reshape(-1, eeg_chan).T, stima.reshape(-1, stim_chan).T, stimb.reshape(-1, stim_chan).T, None, None
+        return eeg.reshape(-1, eeg_chan).T, stima.reshape(-1, stim_chan).T, stimb.reshape(-1, stim_chan).T
         
     def get_SKL_data(self):
     
@@ -335,8 +360,6 @@ class CustomDataset(Dataset):
         stima = self.stima[:, start] if not self.window_pred else self.stima[0, start:end]
         if self.dataset != 'skl':
             stimb = self.stimb[:, start] if not self.window_pred else self.stimb[0, start:end]
-            stima_diff = self.stima_diff[:, start] if not self.window_pred else self.stima_diff[0, start:end]
-            stimb_diff = self.stimb_diff[:, start] if not self.window_pred else self.stimb_diff[0, start:end]
-            return {'eeg':eeg, 'stima':stima, 'stimb':stimb, 'stima_diff':stima_diff, 'stimb_diff':stimb_diff}
+            return {'eeg':eeg, 'stima':stima, 'stimb':stimb}
         else:
             return {'eeg':eeg, 'stima':stima}

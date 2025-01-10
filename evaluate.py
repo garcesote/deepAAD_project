@@ -66,6 +66,7 @@ def main(config, wandb_upload, dataset, key, finetuned):
             rnd_trials = ds_config['rnd_trials']
             hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
             norm_hrtf_diff = ds_config['norm_hrtf_diff'] if 'norm_hrtf_diff' in ds_config.keys() else False
+            spatial_locus = ds_config['spatial_locus'] if 'spatial_locus' in ds_config.keys() else False
             time_shift = 100
             dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
             batch_size =  eval_window if not window_pred else batch_size
@@ -74,7 +75,7 @@ def main(config, wandb_upload, dataset, key, finetuned):
             alpha = train_params['alpha_loss'] if 'alpha_loss' in train_params.keys() else 0
 
             # If the loss mode only takes ILD into account and is finetunned, eval with both correlation and ils with alpha=0.1
-            if loss_mode in ['ild_mae', 'ild_mse']:
+            if loss_mode in ['ild_mae', 'ild_mse'] and finetuned:
                 loss_mode = 'corr_' + loss_mode
                 alpha = 0.1
 
@@ -114,7 +115,9 @@ def main(config, wandb_upload, dataset, key, finetuned):
             for subj in selected_subjects:
 
                 print(f'Evaluating {model} on window {eval_window//64}s with {dataset_name} dataset for subj {subj}')
-            
+
+                if loss_mode is not None: print(f'Optimizing the network based on {loss_mode} criterion')
+
                 mdl_folder = os.path.join(mdl_load_path, dataset_name+'_data', mdl_name)
                 if key == 'population' and not finetuned:
                     mdl_filename = os.listdir(mdl_folder)[0] # only a single trained model
@@ -144,7 +147,8 @@ def main(config, wandb_upload, dataset, key, finetuned):
 
                 # LOAD THE DATA
                 test_set = CustomDataset(dataset, data_path, 'test', subj, window=window_len, hop=hop, data_type=data_type, leave_one_out=leave_one_out, 
-                                        fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, eeg_band=eeg_band)
+                                        fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, norm_hrtf_diff=norm_hrtf_diff, eeg_band=eeg_band, 
+                                        spatial_locus=spatial_locus)
                 test_loader = DataLoader(test_set, batch_size, shuffle=window_pred, pin_memory=True)
                 
                 # LOSS FUNCTION
@@ -256,7 +260,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/spatial_audio/ild_tunning.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/spatial_audio/spatial_only.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")

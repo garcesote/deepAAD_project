@@ -7,62 +7,62 @@ exp_name: 'spatial_only'
 
 runs: # All models trained with window size of 5s
 
-  - model: 'CNN'
-    train_params:
-      batch_size: 128              
-      max_epoch: 200              
-      lr: 2e-05
-      weight_decay: 1e-08                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-      loss_mode: 'diff_mse'
-    dataset_params:
-      window_len: 50  
-      hop: 1          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      window_pred: False
-      hrtf: True
-      norm_hrtf_diff: True
-      shuffle: False
-    model_params:
-      F1: 8
-      D: 8
-      F2: 64
-      AP1: 2
-      AP2: 4
-      dropout: 0.2
-      input_samples: 50
-      output_dim: 2
+  # - model: 'CNN'
+  #   train_params:
+  #     batch_size: 128              
+  #     max_epoch: 200              
+  #     lr: 2e-05
+  #     weight_decay: 1e-08                      
+  #     early_stopping_patience: 5
+  #     scheduler_patience: 2
+  #     loss_mode: 'diff_mse'
+  #   dataset_params:
+  #     window_len: 50  
+  #     hop: 1          
+  #     filt: False       
+  #     fixed: False      
+  #     rnd_trials: False   
+  #     window_pred: False
+  #     hrtf: True
+  #     norm_hrtf_diff: True
+  #     shuffle: False
+  #   model_params:
+  #     F1: 8
+  #     D: 8
+  #     F2: 64
+  #     AP1: 2
+  #     AP2: 4
+  #     dropout: 0.2
+  #     input_samples: 50
+  #     output_dim: 2
 
-  - model: 'CNN'
-    train_params:
-      batch_size: 128              
-      max_epoch: 200              
-      lr: 2e-05
-      weight_decay: 1e-08                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-      loss_mode: 'diff_mse'
-    dataset_params:
-      window_len: 50  
-      hop: 1          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      window_pred: False
-      hrtf: True
-      shuffle: False
-    model_params:
-      F1: 8
-      D: 8
-      F2: 64
-      AP1: 2
-      AP2: 4
-      dropout: 0.2
-      input_samples: 50
-      output_dim: 2
+  # - model: 'CNN'
+  #   train_params:
+  #     batch_size: 128              
+  #     max_epoch: 200              
+  #     lr: 2e-05
+  #     weight_decay: 1e-08                      
+  #     early_stopping_patience: 5
+  #     scheduler_patience: 2
+  #     loss_mode: 'diff_mse'
+  #   dataset_params:
+  #     window_len: 50  
+  #     hop: 1          
+  #     filt: False       
+  #     fixed: False      
+  #     rnd_trials: False   
+  #     window_pred: False
+  #     hrtf: True
+  #     shuffle: False
+  #   model_params:
+  #     F1: 8
+  #     D: 8
+  #     F2: 64
+  #     AP1: 2
+  #     AP2: 4
+  #     dropout: 0.2
+  #     input_samples: 50
+  #     output_dim: 2
 
   - model: 'CNN'
     train_params:

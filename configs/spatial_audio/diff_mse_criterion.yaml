@@ -15,7 +15,7 @@ runs: # All models trained with window size of 5s
       weight_decay: 1e-08                      
       early_stopping_patience: 5
       scheduler_patience: 2
-      loss_mode: 'corr_diff_mse'
+      loss_mode: 'pred_diff_mse'
       alpha_loss: 0.1
     dataset_params:
       window_len: 50  

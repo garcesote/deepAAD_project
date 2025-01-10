@@ -53,12 +53,13 @@ class FCNN(nn.Module):
 
 class CNN(nn.Module):
 
-    def __init__(self, F1=8, D=8, F2=64, AP1 = 2, AP2 = 4, dropout = 0.2, input_channels=64, input_samples=50, output_dim=1, aad_classifier=None):
+    def __init__(self, F1=8, D=8, F2=None, AP1 = 2, AP2 = 4, dropout = 0.2, input_channels=64, input_samples=50, output_dim=1, aad_classifier=None):
 
         super().__init__()
+
+        if F2 is None: F2 = F1 * D
         self.F1 = F1
         self.F2 = F2
-        self.D = D
         self.input_channels = input_channels
         self.input_samples = input_samples
         self.output_dim = output_dim

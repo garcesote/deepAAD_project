@@ -25,7 +25,7 @@ runs: # All models trained with window size of 5s
       rnd_trials: False   
       window_pred: False
       hrtf: True
-      shuffle: False
+      shuffle: True
     model_params:
       F1: 16
       D: 8

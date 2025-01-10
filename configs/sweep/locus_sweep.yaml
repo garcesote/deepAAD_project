@@ -1,0 +1,24 @@
+program: sweep_models.py
+project: spatial_audio
+method: random  # random, grid, bayes
+metric:
+  name: val_loss  # Monitored metric
+  goal: minimize  # Maximize or minimize the metric
+parameters:
+  lr:
+    values: [2e-5, 5e-6, 1e-4]
+  batch_size:
+    values: [128, 320]
+  window:
+    values: [50, 128, 320, 640]
+  dropout:
+    values: [0.2, 0.4]
+  F1: 
+    values: [8, 16]
+  D: 
+    values: [8, 16]
+command:
+  - ${env}
+  - C:/Users/jaulab/SSS_Enviroment/Scripts/python.exe
+  - ${program}
+  - ${args}
