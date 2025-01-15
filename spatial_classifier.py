@@ -72,16 +72,11 @@ def main(config, wandb_upload, dataset, key, finetuned, save_figures):
 
         for eval_window in window_list:
             
-            # leave_one_out = True if key == 'subj_independent' else False
-            # data_type = ds_config['data_type'] if 'data_type' in ds_config.keys() else 'mat'
             eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
             fixed = ds_config['fixed']
             rnd_trials = ds_config['rnd_trials']
-            # dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
-            # batch_size =  eval_window if not window_pred else batch_size
             batch_size = eval_window
             lr = float(train_params['lr'])
-            val_hop = ds_config['hop'] if window_pred else 1
             loss_mode = train_params['loss_mode'] if 'loss_mode' in train_params.keys() else 'mean'
             alpha = train_params['alpha_loss'] if 'alpha_loss' in train_params.keys() else 0
             shuffle = ds_config['shuffle'] if 'shuffle' in ds_config.keys() else True
@@ -134,9 +129,7 @@ def main(config, wandb_upload, dataset, key, finetuned, save_figures):
                 
                 # DEFINE THE LOSS FUNCTION
                 criterion = CustomLoss(mode=loss_mode, window_pred=window_pred, alpha_end=alpha)
-
-                # if wandb_upload: wandb.init(project=project, name=exp_name, tags=['finetune'], config=run)
-
+                
                 # LOAD DATA
                 train_loader = DataLoader(train_set, batch_size, shuffle= shuffle, pin_memory=True)
                 

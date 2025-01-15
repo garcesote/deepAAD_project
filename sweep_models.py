@@ -207,6 +207,11 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
                 wandb_log['train_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in train_loss])).item()
             wandb.log(wandb_log)
 
+            # Save best results
+            if mean_val_loss < best_accuracy or epoch == 0:
+                best_accuracy = mean_val_loss
+                best_epoch = epoch
+
         wandb.finish()
 
 def main(config, dataset, key):
@@ -228,7 +233,7 @@ def main(config, dataset, key):
 
 if __name__ == "__main__":
 
-    config_path = 'configs/spatial_audio/spatial_locus_sweep.yaml'
+    config_path = 'configs/sweep_runs/ild_sweep_local.yaml'
     dataset = 'fulsang'
     key = 'population'
 

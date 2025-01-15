@@ -6,7 +6,7 @@ metric:
   goal: minimize  # Maximize or minimize the metric
 parameters:
   lr:
-    values: [2e-5, 5e-6, 1e-4]
+    values: [2e-5, 5e-6, 1e-4] 
   batch_size:
     values: [128, 320]
   window:

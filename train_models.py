@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from models.dnn import FCNN, CNN
@@ -206,11 +207,18 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                         loss = loss_list[0]
                         
                         if dec_acc:
-                            stimb = data['stimb'].to(device, dtype=torch.float)
-                            # Decoding accuracy of the model
-                            unat_loss = criterion(preds=preds, targets = stimb)[0]
-                            if loss.item() < unat_loss.item():
-                                val_att_corr += 1
+                            if loss_mode != 'spatial_locus':
+                                stimb = data['stimb'].to(device, dtype=torch.float)
+                                # Decoding accuracy of the model
+                                unat_loss = criterion(preds=preds, targets = stimb)[0]
+                                if loss.item() < unat_loss.item():
+                                    val_att_corr += 1
+                            else:
+                                probs = F.sigmoid(preds)
+                                pred_labels = (probs >= 0.5).float()
+                                n_correct = torch.sum(pred_labels == stima)
+                                if n_correct > batch_size // 2:
+                                    val_att_corr += 1
 
                         val_loss.append(loss_list)
 
@@ -221,7 +229,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                 scheduler.step(-mean_val_loss)
 
                 # Logging metrics
-                print(f'Epoch: {epoch} | Train loss: {-mean_train_loss:.4f} | Val loss/acc: {-mean_val_loss:.4f}/{val_decAccuracy:.4f}')
+                print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
                 
                 if wandb_upload:
                     wandb_log = {'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
@@ -289,7 +297,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/spatial_audio/spatial_preds.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/spatial_audio/ild_best_models.yaml", help="Ruta al archivo config")
     # parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")

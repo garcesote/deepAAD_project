@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from utils.functional import multiple_loss_opt, set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
 from utils.datasets import CustomDataset
 from utils.loss_functions import CustomLoss
@@ -175,17 +176,18 @@ def main(config, wandb_upload, dataset, key, finetuned):
                         nd_loss = criterion(preds=y_hat, targets = torch.roll(stima, time_shift))[0]
 
                         if dec_acc:
-                            stimb = data['stimb'].to(device, dtype=torch.float)
-                            unat_loss_list = criterion(preds=y_hat, targets = stimb)
-                            unat_loss = criterion(preds=y_hat, targets = stimb)[0]
-                            # Decoding accuracy
-                            if loss.item() < unat_loss.item():
-                                att_corr += 1
+                            if loss_mode != 'spatial_locus':
+                                stimb = data['stimb'].to(device, dtype=torch.float)
+                                unat_loss_list = criterion(preds=y_hat, targets = stimb)
+                                unat_loss = criterion(preds=y_hat, targets = stimb)[0]
+                                # Decoding accuracy
+                                if loss.item() < unat_loss.item():
+                                    att_corr += 1
 
                         # Append all losses for eval results
-                        eval_loss.append(-loss.item())
+                        eval_loss.append(loss.item())
                         eval_loss_list.append(loss_list)
-                        eval_nd_loss.append(-nd_loss.item())
+                        eval_nd_loss.append(nd_loss.item())
 
                 eval_results[subj] = eval_loss
                 nd_results[subj] = eval_nd_loss
@@ -260,7 +262,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/spatial_audio/spatial_only.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/spatial_audio/locus_best_models.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
