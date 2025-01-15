@@ -25,7 +25,7 @@ runs: # All models trained with window size of 5s
       window_pred: False
       hrtf: True
     loss_params:
-      mode: 'corr_ild_mae'
+      mode: 'corr_ild_mse'
       alpha_end: 0.02
     model_params:
       F1: 8
@@ -33,6 +33,6 @@ runs: # All models trained with window size of 5s
       F2: 64
       AP1: 2
       AP2: 4
-      dropout: 0.2
+      dropout: 0.5
       input_samples: 50
       output_dim: 2

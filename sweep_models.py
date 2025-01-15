@@ -26,29 +26,23 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
 
     # Config training
     train_params = run['train_params']
-    lr = float(wandb.config.lr)
-    batch_size = wandb.config.batch_size
+    lr = float(getattr(wandb.config, 'lr', train_params.get('lr')))
+    batch_size = getattr(wandb.config, 'batch_size', train_params.get('batch_size'))
     max_epoch = train_params['max_epoch']
     weight_decay = float(train_params['weight_decay'])
-    scheduler_patience = train_params['scheduler_patience'] if early_stop else 10
+    scheduler_patience = train_params.get('scheduler_patience', 10)
     early_stopping_patience = train_params['early_stopping_patience'] if early_stop else max_epoch
     preproc_mode = train_params.get('preproc_mode')
 
     # Config dataset
     ds_config = run['dataset_params']
-    run['dataset_params']['window'] = wandb.config.window
+    run['dataset_params']['window'] = getattr(wandb.config, 'window', ds_config['window'])
     ds_config['leave_one_out'] = True if key == 'subj_independent' else False
-
-    # Config model
-    run['model_params']['dropout'] = wandb.config.dropout
-    run['model_params']['input_samples'] = wandb.config.window
-    run['model_params']['F1'] = wandb.config.F1
-    run['model_params']['D'] = wandb.config.D
 
     # Config loss
     loss_params = run['loss_params']
-    # run['loss_params']['alpha_end'] = wandb.config.alpha_loss
-    loss_mode = loss_params.get('mode', 'mean')
+    loss_params['alpha_end'] = getattr(wandb.config, 'alpha_end', loss_params.get('alpha_end'))
+    loss_params['mode'] = getattr(wandb.config, 'mode', loss_params.get('mode', 'mean'))
     
     data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
 
@@ -76,6 +70,16 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
             run['model_params']['n_chan'] = get_channels(dataset)
             mdl = FCNN(**run['model_params'])
         elif model == 'CNN':
+
+            # Config model
+            mdl_config = run['model_params']
+            mdl_config['dropout'] = getattr(wandb.config, 'dropout', mdl_config['dropout'])
+            mdl_config['input_samples'] = getattr(wandb.config, 'input_samples', mdl_config['input_samples'])
+            mdl_config['F1'] = getattr(wandb.config, 'F1', mdl_config['F1'])
+            mdl_config['D'] = getattr(wandb.config, 'D', mdl_config['D'])
+            mdl_config['AP1'] = getattr(wandb.config, 'AP1', mdl_config['AP1'])
+            mdl_config['AP2'] = getattr(wandb.config, 'AP2', mdl_config['AP2'])
+
             run['model_params']['input_channels'] = get_channels(dataset)
             mdl = CNN(**run['model_params'])
         elif model == 'VLAAI':
@@ -200,7 +204,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
 
             wandb_log = {'epoch': epoch,'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
             # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
-            if multiple_loss_opt(loss_mode):
+            if multiple_loss_opt(loss_params['mode']):
                 wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
                 wandb_log['train_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in train_loss])).item()
                 wandb_log['val_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in val_loss])).item()
