@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from utils.functional import multiple_loss_opt, set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
+from utils.functional import get_mdl_name, multiple_loss_opt, set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
 from utils.datasets import CustomDataset
 from utils.loss_functions import CustomLoss
 from torch.utils.data import DataLoader
@@ -16,15 +16,14 @@ import json
 import wandb
 import sys
 
-def main(config, wandb_upload, dataset, key, finetuned):
+def main(config, wandb_upload, dataset, key, finetuned, spatial_clsf):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
     project = 'spatial_audio'
-    # wandb_upload=True
+    exp_name = config['exp_name']
     # window_list = [64, 128, 320, 640, 1280, 2560] # 1s, 2s, 5s, 10s, 20s, 40s
     window_list = [64, 128, 320, 640, 1600, 3200] # 1s, 2s, 5s, 10s, 25s, 50s
-    # window_list = [3200]
     
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
@@ -37,11 +36,10 @@ def main(config, wandb_upload, dataset, key, finetuned):
 
         # Global params
         model = run['model']
-        exp_name = config['exp_name'] + '_' + model
-
         mdl_load_folder = 'finetune_models' if finetuned else 'models'
 
         mdl_load_path = os.path.join(global_path, 'results', project, key, mdl_load_folder)
+        mdl_name = get_mdl_name(run)
 
         tag = 'evaluation_finetune' if finetuned else 'evaluation'
 
@@ -49,77 +47,58 @@ def main(config, wandb_upload, dataset, key, finetuned):
 
         window_accuracies = {win//64: None for win in window_list}
 
+        # Config dataset
+        ds_config = run['dataset_params']
+        ds_config['leave_one_out'] = True if key == 'subj_independent' else False
+
+        # Config training
+        train_params = run['train_params']
+        preproc_mode = train_params.get('preproc_mode')
+        batch_size = train_params.get('batch_size')
+        shuffle = train_params.get('shuffle')
+        shuffle_test = shuffle if ds_config.get('window_pred') else 1
+
+        # Config loss
+        loss_params = run['loss_params']
+        loss_mode = loss_params.get('mode', 'mean')
+        
+        # If the loss mode only takes ILD into account and is finetunned, eval with both correlation and ils with alpha=0.1
+        if loss_mode in ['ild_mae', 'ild_mse'] and finetuned:
+            loss_params['mode'] = 'corr_' + loss_mode
+            loss_params['alpha_end'] = 0.1
+
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        # GET THE MODEL PATH
+        if finetuned:
+            eval_path, dec_path = 'eval_finetuned_metrics', 'decode_finetuned_accuracy'  
+        else:
+            eval_path, dec_path = 'eval_metrics', 'decode_accuracy'
+
+        # DEFINE THE SAVE PATH
+        dst_save_path = os.path.join(global_path, 'results', project, key, eval_path, dataset+'_data', mdl_name)
+        decAcc_save_path = os.path.join(global_path, 'results', project, key, dec_path, dataset+'_data', mdl_name)
+
+        eval_results = {}
+        nd_results = {} # construct a null distribution when evaluating
+        dec_results = []
+        eval_mean_results = []
+        
+        # Evaluate the models for each subject independently on the dataset
+        selected_subjects = [get_subjects(dataset)[0]]
+
+        # Define the time-shift for computing the null-distribution
+        time_shift = 100
+
         for eval_window in window_list:
-
-            # Load config
-            ds_config = run['dataset_params']
-            train_params = run['train_params']
-            
-            window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
-            preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else None
-            data_path = get_data_path(global_data_path, dataset, preproc_mode = preproc_mode)
-            window_len = ds_config['window_len'] if not window_pred else eval_window
-            hop = ds_config['hop'] if window_pred else 1
-            leave_one_out = True if key == 'subj_independent' else False
-            data_type = ds_config['data_type'] if 'data_type' in ds_config.keys() else 'mat'
-            eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
-            fixed = ds_config['fixed']
-            rnd_trials = ds_config['rnd_trials']
-            hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
-            norm_hrtf_diff = ds_config['norm_hrtf_diff'] if 'norm_hrtf_diff' in ds_config.keys() else False
-            spatial_locus = ds_config['spatial_locus'] if 'spatial_locus' in ds_config.keys() else False
-            time_shift = 100
-            dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
-            batch_size =  eval_window if not window_pred else batch_size
-            lr = float(train_params['lr'])
-            loss_mode = train_params['loss_mode'] if 'loss_mode' in train_params.keys() else 'mean'
-            alpha = train_params['alpha_loss'] if 'alpha_loss' in train_params.keys() else 0
-
-            # If the loss mode only takes ILD into account and is finetunned, eval with both correlation and ils with alpha=0.1
-            if loss_mode in ['ild_mae', 'ild_mse'] and finetuned:
-                loss_mode = 'corr_' + loss_mode
-                alpha = 0.1
-
-            if fixed: assert(dataset=='jaulab') # Only fixed subject for jaulab dataset
-            dataset_name = dataset+'_fixed' if fixed else dataset
-
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-            # GET THE MODEL PATH
-            mdl_name = f'{model}_batch={train_params["batch_size"]}_block={ds_config["window_len"]}_lr={lr}'
-
-            # Add extensions to the model name depending on the params
-            if preproc_mode is not None: mdl_name += '_' + preproc_mode
-            if eeg_band is not None: mdl_name += '_' + eeg_band
-            if loss_mode != 'mean': mdl_name += '_' + loss_mode
-            if alpha != 0: mdl_name += '_alpha=' + str(alpha)
-            if rnd_trials: mdl_name += '_rnd'
-            if hrtf: mdl_name += '_hrtf'
-            if norm_hrtf_diff: mdl_name += '_norm'
-
-            if finetuned:
-                eval_path, dec_path = 'eval_finetuned_metrics', 'decode_finetuned_accuracy'  
-            else:
-                eval_path, dec_path = 'eval_metrics', 'decode_accuracy'
-
-            # DEFINE THE SAVE PATH
-            dst_save_path = os.path.join(global_path, 'results', project, key, eval_path, dataset_name+'_data', mdl_name)
-            decAcc_save_path = os.path.join(global_path, 'results', project, key, dec_path, dataset_name+'_data', mdl_name)
-
-            eval_results = {}
-            nd_results = {} # construct a null distribution when evaluating
-            dec_results = []
-            eval_mean_results = []
-            
-            selected_subjects = get_subjects(dataset)
 
             for subj in selected_subjects:
 
-                print(f'Evaluating {model} on window {eval_window//64}s with {dataset_name} dataset for subj {subj}')
+                print(f'Evaluating {model} on window {eval_window//64}s with {dataset} dataset for subj {subj}')
 
                 if loss_mode is not None: print(f'Optimizing the network based on {loss_mode} criterion')
 
-                mdl_folder = os.path.join(mdl_load_path, dataset_name+'_data', mdl_name)
+                mdl_folder = os.path.join(mdl_load_path, dataset+'_data', mdl_name)
                 if key == 'population' and not finetuned:
                     mdl_filename = os.listdir(mdl_folder)[0] # only a single trained model
                 else:
@@ -147,13 +126,18 @@ def main(config, wandb_upload, dataset, key, finetuned):
                 mdl.to(device)
 
                 # LOAD THE DATA
-                test_set = CustomDataset(dataset, data_path, 'test', subj, window=window_len, hop=hop, data_type=data_type, leave_one_out=leave_one_out, 
-                                        fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, norm_hrtf_diff=norm_hrtf_diff, eeg_band=eeg_band, 
-                                        spatial_locus=spatial_locus)
-                test_loader = DataLoader(test_set, batch_size, shuffle=window_pred, pin_memory=True)
+                data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
+                test_set = CustomDataset(
+                    dataset=dataset,
+                    data_path=data_path,
+                    split='test',
+                    subjects=subj,
+                    **ds_config
+                )
+                test_loader = DataLoader(test_set, batch_size, shuffle= shuffle_test, pin_memory=True)
                 
                 # LOSS FUNCTION
-                criterion = CustomLoss(mode=loss_mode, window_pred=window_pred, alpha_end=alpha)
+                criterion = CustomLoss(window_pred=ds_config.get('window_pred', True), **run['loss_params'])
 
                 # EVALUATE THE MODEL
                 eval_loss = []
@@ -167,21 +151,26 @@ def main(config, wandb_upload, dataset, key, finetuned):
                         eeg = data['eeg'].to(device, dtype=torch.float)
                         stima = data['stima'].to(device, dtype=torch.float)
                         
-                        y_hat = mdl(eeg)
+                        preds = mdl(eeg)
 
-                        loss_list = criterion(preds=y_hat, targets = stima)
+                        loss_list = criterion(preds=preds, targets = stima)
                         loss = loss_list[0]
 
                         # Calculates Pearson's coef. for the matching distribution and for the null one
-                        nd_loss = criterion(preds=y_hat, targets = torch.roll(stima, time_shift))[0]
+                        nd_loss = criterion(preds=preds, targets = torch.roll(stima, time_shift))[0]
 
-                        if dec_acc:
+                        if data['stimb'] is not None:
                             if loss_mode != 'spatial_locus':
                                 stimb = data['stimb'].to(device, dtype=torch.float)
-                                unat_loss_list = criterion(preds=y_hat, targets = stimb)
-                                unat_loss = criterion(preds=y_hat, targets = stimb)[0]
-                                # Decoding accuracy
+                                # Decoding accuracy of the model
+                                unat_loss = criterion(preds=preds, targets = stimb)[0]
                                 if loss.item() < unat_loss.item():
+                                    att_corr += 1
+                            else:
+                                probs = F.sigmoid(preds)
+                                pred_labels = (probs >= 0.5).float()
+                                n_correct = torch.sum(pred_labels == stima)
+                                if n_correct > batch_size // 2:
                                     att_corr += 1
 
                         # Append all losses for eval results
@@ -214,7 +203,6 @@ def main(config, wandb_upload, dataset, key, finetuned):
 
             # Save the window results to compute mesd
             window_accuracies[eval_window//64] = dec_results
-
             str_win = str(eval_window//64)+'s' if 'VLAAI' in model else str(batch_size//64)+'s'
             
             # SAVE RESULTS
@@ -262,11 +250,12 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/spatial_audio/locus_best_models.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/spatial_audio/ild_best_models.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--finetuned", action='store_true', help="When included search for the model on the finetune folder")
+    parser.add_argument("--spatial_clsf", action='store_true', help="When included evaluate by fitting a classifier with both")
 
     args = parser.parse_args()
 
@@ -285,4 +274,4 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, args.key, args.finetuned)
+    main(config, wandb_upload, args.dataset, args.key, args.finetuned, args.spatial_clsf)

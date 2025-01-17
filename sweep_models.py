@@ -11,6 +11,7 @@ from models.vlaai import VLAAI
 from models.eeg_conformer import Conformer, ConformerConfig
 from utils.functional import multiple_loss_opt, get_data_path, get_channels, get_subjects, set_seeds, get_loss
 from utils.datasets import CustomDataset
+from utils.sampler import BatchRandomSampler
 
 import torch
 from torch.utils.data import DataLoader
@@ -33,11 +34,17 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
     scheduler_patience = train_params.get('scheduler_patience', 10)
     early_stopping_patience = train_params['early_stopping_patience'] if early_stop else max_epoch
     preproc_mode = train_params.get('preproc_mode')
+    batch_rnd_sampler = train_params.get('batch_rnd_sampler', False)
+    shuffle = train_params.get('preproc_mode')
+    
 
     # Config dataset
     ds_config = run['dataset_params']
     run['dataset_params']['window'] = getattr(wandb.config, 'window', ds_config['window'])
     ds_config['leave_one_out'] = True if key == 'subj_independent' else False
+    ds_val_config = ds_config
+    if ds_config['window_pred'] == False: ds_val_config['hop'] = 1 
+    val_shuffle = shuffle if ds_config.get('window_pred') else 1
 
     # Config loss
     loss_params = run['loss_params']
@@ -82,6 +89,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
 
             run['model_params']['input_channels'] = get_channels(dataset)
             mdl = CNN(**run['model_params'])
+            
         elif model == 'VLAAI':
             run['model_params']['input_channels'] = get_channels(dataset)
             mdl = VLAAI(**run['model_params'])
@@ -109,18 +117,22 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
             data_path=data_path,
             split='train',
             subjects=subj,
-            **run['dataset_params']
+            **ds_config
         )
         val_set = CustomDataset(
             dataset=dataset,
             data_path=data_path,
             split='val',
             subjects=subj,
-            **run['dataset_params']
+            **ds_val_config
         )
 
-        train_loader = DataLoader(train_set, batch_size, shuffle=train_params.get('shuffle', True), pin_memory=True)
-        val_loader = DataLoader(val_set, batch_size, shuffle=ds_config.get('window_pred', True), pin_memory=True)
+        if batch_rnd_sampler:
+            batch_sampler = BatchRandomSampler(train_set, batch_size)
+            train_loader = DataLoader(train_set, batch_sampler=batch_sampler, pin_memory=True)
+        else:
+            train_loader = DataLoader(train_set, batch_size, shuffle = shuffle, pin_memory=True, drop_last=True)
+            val_loader = DataLoader(val_set, batch_size, shuffle= val_shuffle, pin_memory=True)
 
         # OPTIMIZER PARAMS
         optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
@@ -131,6 +143,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
 
         # Early stopping parameters
         best_epoch = 0
+        best_accuracy = 0
 
         # Training loop
         for epoch in range(max_epoch):

@@ -2,14 +2,16 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 from models.dnn import FCNN, CNN
 from models.vlaai import VLAAI
 from models.eeg_conformer import Conformer, ConformerConfig
-from utils.functional import multiple_loss_opt, get_data_path, get_channels, get_subjects, set_seeds, get_loss
+from utils.functional import get_mdl_name, multiple_loss_opt, get_data_path, get_channels, get_subjects, set_seeds, get_loss
 from utils.datasets import CustomDataset
 from utils.sampler import BatchRandomSampler
-from tqdm import tqdm
 from utils.loss_functions import CustomLoss
+
+from tqdm import tqdm
 import argparse
 import yaml
 import os
@@ -22,6 +24,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
     global_data_path = config['global_data_path']
     project = 'spatial_audio'
     config['dataset'] = dataset
+    exp_name = config['exp_name']
     config['key'] = key
 
     # REPRODUCIBILITY
@@ -35,40 +38,34 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
 
         # Global params
         model = run['model']
-        exp_name = config['exp_name'] + '_' + model
+        
         # exp_name = ('_').join([key, dataset, model])
 
+        # Get configs
+        train_config = run['train_params']
+        ds_config = run['dataset_params']
+        loss_config = run['loss_params']
+
         # Config training
-        train_params = run['train_params']
-        batch_size = train_params['batch_size']
-        max_epoch = train_params['max_epoch']
-        lr = float(train_params['lr'])
-        weight_decay = float(train_params['weight_decay'])
-        scheduler_patience = train_params['scheduler_patience'] if early_stop else 10
-        early_stopping_patience = train_params['early_stopping_patience'] if early_stop else max_epoch
-        loss_mode = train_params['loss_mode'] if 'loss_mode' in train_params.keys() else 'mean'
-        alpha = train_params['alpha_loss'] if 'alpha_loss' in train_params.keys() else 0
-        batch_rnd_sampler = train_params['batch_rnd_sampler'] if 'batch_rnd_sampler' in train_params.keys() else False
+        batch_size = train_config['batch_size']
+        lr = float(train_config['lr'])
+        max_epoch = train_config.get('max_epoch', 200)
+        weight_decay = float(train_config.get('weight_decay', 1e-8))
+        scheduler_patience = train_config.get('scheduler_patience', 10)
+        early_stopping_patience = train_config['early_stopping_patience'] if early_stop else max_epoch
+        batch_rnd_sampler = train_config['batch_rnd_sampler'] if 'batch_rnd_sampler' in train_config.keys() else False
+        preproc_mode = train_config.get('preproc_mode')
+        shuffle = train_config.get('preproc_mode')
+        val_shuffle = shuffle if ds_config.get('window_pred') else 1
 
         # Config dataset
-        ds_config = run['dataset_params']
-        preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else None
-        data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
-        window_len = ds_config['window_len']
-        hop = ds_config['hop']
-        leave_one_out = True if key == 'subj_independent' else False
-        data_type = ds_config['data_type'] if 'data_type' in ds_config.keys() else 'mat'
-        eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
-        fixed = ds_config['fixed']
-        rnd_trials = ds_config['rnd_trials']
-        hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
-        norm_hrtf_diff = ds_config['norm_hrtf_diff'] if 'norm_hrtf_diff' in ds_config.keys() else False
-        spatial_locus = ds_config['spatial_locus'] if 'spatial_locus' in ds_config.keys() else False
-        window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
-        dec_acc = True if dataset != 'skl' else False # skl dataset without unattended stim => dec-acc is not possible
-        val_hop = ds_config['hop'] if window_pred else 1
-        shuffle = ds_config['shuffle'] if 'shuffle' in ds_config.keys() else True
+        ds_config['leave_one_out'] = True if key == 'subj_independent' else False
+        ds_val_config = ds_config
+        if ds_config['window_pred'] == False: ds_val_config['hop'] = 1 
 
+        # Config loss
+        loss_mode = loss_config.get('mode', 'mean')
+        
         # Saving paths
         mdl_save_path = os.path.join(global_path, 'results', project, key, 'models')
         metrics_save_path = os.path.join(global_path, 'results', project, key, 'metrics')
@@ -117,39 +114,49 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
             print(f'Model size: {mdl_size / 1e06:.2f}M')
 
             # WEIGHT INITILAIZATION
-            if exp_name == 'bool_params':
-                if train_params['init_weights']: mdl.apply(mdl.init_weights)
+            init_weights = train_config.get('init_weights', False)
+            if init_weights: mdl.apply(mdl.init_weights)
     
             if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
             if gradient_tracking and wandb_upload: wandb.watch(models=mdl, log='all')
 
             # LOAD THE DATA
-            train_set = CustomDataset(dataset, data_path, 'train', subj, window=window_len, hop=hop, data_type=data_type, leave_one_out=leave_one_out,  
-                                       fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, norm_hrtf_diff=norm_hrtf_diff, eeg_band = eeg_band,
-                                       spatial_locus= spatial_locus)
-            val_set = CustomDataset(dataset, data_path, 'val',  subj, window=window_len, hop=val_hop, data_type=data_type, leave_one_out=leave_one_out, 
-                                    fixed=fixed, rnd_trials = rnd_trials, window_pred=window_pred, hrtf=hrtf, norm_hrtf_diff=norm_hrtf_diff, eeg_band = eeg_band,
-                                    spatial_locus= spatial_locus)
+            data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
+            train_set = CustomDataset(
+                dataset=dataset,
+                data_path=data_path,
+                split='train',
+                subjects=subj,
+                **ds_config
+            )
+            val_set = CustomDataset(
+                dataset=dataset,
+                data_path=data_path,
+                split='val',
+                subjects=subj,
+                **ds_val_config
+            )
             
             if batch_rnd_sampler:
                 batch_sampler = BatchRandomSampler(train_set, batch_size)
                 train_loader = DataLoader(train_set, batch_sampler=batch_sampler, pin_memory=True)
             else:
-                train_loader = DataLoader(train_set, batch_size, shuffle=shuffle, pin_memory=True, drop_last=True)
+                train_loader = DataLoader(train_set, batch_size, shuffle = shuffle, pin_memory=True, drop_last=True)
             
-            val_loader = DataLoader(val_set, batch_size, shuffle = window_pred, pin_memory=True, drop_last=True)
+            val_loader = DataLoader(val_set, batch_size, shuffle = val_shuffle, pin_memory=True, drop_last=True)
             
             # OPTIMIZER PARAMS
             optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
             scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience, verbose=True)
 
             # LOSS FUNCTION
-            criterion = CustomLoss(mode=loss_mode, window_pred=window_pred, alpha_end=alpha)
+            criterion = CustomLoss(window_pred=ds_config.get('window_pred', True), **run['loss_params'])
 
             # Early stopping parameters
             best_accuracy=0
             best_epoch=0
 
+            # Saving metrics lists
             train_mean_loss = []
             val_mean_loss = []
             val_decAccuracies = []
@@ -191,6 +198,8 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
 
                 mdl.eval()
                 val_loss = []
+                val_att_loss = 0
+                val_att_ild = 0
                 val_att_corr = 0
 
                 # Validation
@@ -206,25 +215,34 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                         loss_list = criterion(preds=preds, targets = stima)
                         loss = loss_list[0]
                         
-                        if dec_acc:
+                        if data['stimb'] is not None:
                             if loss_mode != 'spatial_locus':
                                 stimb = data['stimb'].to(device, dtype=torch.float)
                                 # Decoding accuracy of the model
-                                unat_loss = criterion(preds=preds, targets = stimb)[0]
+                                unat_loss_list = criterion(preds=preds, targets = stimb)
+                                unat_loss = unat_loss_list[0]
                                 if loss.item() < unat_loss.item():
-                                    val_att_corr += 1
+                                    val_att_loss += 1
+                                # When multiple loss compute the accuracy for each metric
+                                if len(loss_list) > 1:
+                                    if loss_list[1].item() < unat_loss_list[1].item():
+                                        val_att_corr += 1
+                                    if loss_list[2].item() < unat_loss_list[2].item():
+                                        val_att_ild += 1
                             else:
                                 probs = F.sigmoid(preds)
                                 pred_labels = (probs >= 0.5).float()
                                 n_correct = torch.sum(pred_labels == stima)
                                 if n_correct > batch_size // 2:
-                                    val_att_corr += 1
+                                    val_att_loss += 1
 
                         val_loss.append(loss_list)
 
                 mean_val_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in val_loss])).item()
                 mean_train_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in train_loss])).item()
-                val_decAccuracy = val_att_corr / len(val_loader) * 100
+                val_decAccuracy = val_att_loss / len(val_loader) * 100
+                val_corr_decAccuracy = val_att_corr / len(val_loader) * 100
+                val_ild_decAccuracy = val_att_ild / len(val_loader) * 100
 
                 scheduler.step(-mean_val_loss)
 
@@ -237,8 +255,10 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                     if multiple_loss_opt(loss_mode):
                         wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
                         wandb_log['train_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in train_loss])).item()
+                        wandb_log['val_acc_corr'] = val_corr_decAccuracy
                         wandb_log['val_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in val_loss])).item()
                         wandb_log['train_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in train_loss])).item()
+                        wandb_log['val_acc_ild'] = val_ild_decAccuracy
                     wandb.log(wandb_log)
             
                 train_mean_loss.append(mean_train_loss)
@@ -251,25 +271,14 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                     best_accuracy = mean_val_loss
                     best_epoch = epoch
                     best_state_dict = mdl.state_dict()
-            
-            dataset_filename = dataset+'_fixed' if fixed and dataset == 'jaulab' else dataset
-            
+
+            # Save best final model and metrics           
             if not tunning:
 
-                # Save best final model
-                mdl_name = f'{model}_batch={batch_size}_block={window_len}_lr={lr}'
+                mdl_name = get_mdl_name(run)
                 prefix = model if key == 'population' else subj
-
-                # Add extensions to the model name depending on the params
-                if preproc_mode is not None: mdl_name += '_' + preproc_mode
-                if eeg_band is not None: mdl_name += '_' + eeg_band
-                if loss_mode != 'mean': mdl_name += '_' + loss_mode
-                if alpha != 0: mdl_name += '_alpha=' + str(alpha)
-                if rnd_trials: mdl_name += '_rnd'
-                if hrtf: mdl_name += '_hrtf'
-                if norm_hrtf_diff: mdl_name += '_norm'
             
-                mdl_folder = os.path.join(mdl_save_path, dataset_filename+'_data', mdl_name)
+                mdl_folder = os.path.join(mdl_save_path, dataset+'_data', mdl_name)
                 if not os.path.exists(mdl_folder):
                     os.makedirs(mdl_folder)
                 torch.save(
@@ -277,11 +286,10 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                     os.path.join(mdl_folder, f'{prefix}_epoch={epoch}_acc={best_accuracy:.4f}.ckpt')
                 )
 
-                # Save corresponding train and val metrics
-                val_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'val')
+                val_folder = os.path.join(metrics_save_path, dataset+'_data', mdl_name, 'val')
                 if not os.path.exists(val_folder):
                     os.makedirs(val_folder)
-                train_folder = os.path.join(metrics_save_path, dataset_filename+'_data', mdl_name, 'train')
+                train_folder = os.path.join(metrics_save_path, dataset+'_data', mdl_name, 'train')
                 if not os.path.exists(train_folder):
                     os.makedirs(train_folder)
                 json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
@@ -298,7 +306,6 @@ if __name__ == "__main__":
     
     # Add config argument
     parser.add_argument("--config", type=str, default="configs/spatial_audio/ild_best_models.yaml", help="Ruta al archivo config")
-    # parser.add_argument("--config", type=str, default='configs/gradient_tracking/models_tracking.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")

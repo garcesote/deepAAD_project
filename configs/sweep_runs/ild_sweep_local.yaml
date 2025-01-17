@@ -17,7 +17,7 @@ runs: # All models trained with window size of 5s
       shuffle: True
     dataset_params:
       window: 50
-      hop: 6
+      hop: 2
       norm_stim: False
       data_type: 'mat'
       fixed: False

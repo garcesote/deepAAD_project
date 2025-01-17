@@ -9,115 +9,28 @@ runs: # All models trained with window size of 5s
 
   - model: 'CNN'
     train_params:
-      batch_size: 320              
+      batch_size: 128              
       max_epoch: 200              
       lr: 2e-05
       weight_decay: 1e-08                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-      loss_mode: 'corr_ild_mse'
-      alpha_loss: 0.02
+      early_stopping_patience: 2
+      scheduler_patience: 1
+      shuffle: True
     dataset_params:
-      window_len: 128  
-      hop: 12          
-      filt: False       
+      window: 50  
+      hop: 2                 
       fixed: False      
       rnd_trials: False   
       window_pred: False
       hrtf: True
-      shuffle: False
-    model_params:
-      F1: 32
-      D: 2
-      AP1: 2
-      AP2: 4
-      dropout: 0.3
-      input_samples: 128
-      output_dim: 2
-
-  - model: 'CNN'
-    train_params:
-      batch_size: 320              
-      max_epoch: 200              
-      lr: 2e-05
-      weight_decay: 1e-08                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-      loss_mode: 'corr_ild_mse'
-      alpha_loss: 0.02
-      batch_rnd_sampler: True
-    dataset_params:
-      window_len: 128  
-      hop: 12          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      window_pred: False
-      hrtf: True
-      shuffle: False
-    model_params:
-      F1: 32
-      D: 2
-      AP1: 2
-      AP2: 4
-      dropout: 0.3
-      input_samples: 128
-      output_dim: 2
-
-  - model: 'CNN'
-    train_params:
-      batch_size: 320              
-      max_epoch: 200              
-      lr: 2e-05
-      weight_decay: 1e-08                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-      loss_mode: 'corr_ild_mse'
-      alpha_loss: 0.02
-      batch_rnd_sampler: True
-    dataset_params:
-      window_len: 128  
-      hop: 12          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      window_pred: False
-      hrtf: True
-      shuffle: False
-    model_params:
-      F1: 32
-      D: 4
-      AP1: 2
-      AP2: 4
-      dropout: 0.35
-      input_samples: 128
-      output_dim: 2
-
-  - model: 'CNN'
-    train_params:
-      batch_size: 320              
-      max_epoch: 200              
-      lr: 1e-05
-      weight_decay: 1e-08                      
-      early_stopping_patience: 5
-      scheduler_patience: 2
-      loss_mode: 'corr_ild_mse'
-      alpha_loss: 0.02
-      batch_rnd_sampler: True
-    dataset_params:
-      window_len: 128  
-      hop: 12          
-      filt: False       
-      fixed: False      
-      rnd_trials: False   
-      window_pred: False
-      hrtf: True
-      shuffle: False
+    loss_params:
+      mode: 'corr_ild_mse'
+      alpha_end: 0.02
     model_params:
       F1: 8
       D: 16
-      AP1: 4
+      AP1: 2
       AP2: 4
-      dropout: 0.2
-      input_samples: 128
+      dropout: 0.3
+      input_samples: 50
       output_dim: 2

@@ -17,7 +17,7 @@ import numpy as np
 from models.dnn import FCNN, CNN
 from utils.datasets import CustomDataset
 from utils.loss_functions import CustomLoss
-from utils.functional import set_seeds, get_subjects, get_channels, get_data_path, get_filename
+from utils.functional import get_mdl_name, set_seeds, get_subjects, get_channels, get_data_path, get_filename
 from utils.plot_results import plot_clsf_results
 
 def main(config, wandb_upload, dataset, key, finetuned, save_figures):
@@ -55,48 +55,47 @@ def main(config, wandb_upload, dataset, key, finetuned, save_figures):
         else:
             selected_subj = get_subjects(dataset)
 
-        # Load config
+        # Config dataset
         ds_config = run['dataset_params']
+        ds_config['leave_one_out'] = True if key == 'subj_independent' else False
+
         train_params = run['train_params']
-        hrtf = ds_config['hrtf'] if 'hrtf' in ds_config.keys() else False
-        norm_hrtf_diff = ds_config['norm_hrtf_diff'] if 'norm_hrtf_diff' in ds_config.keys() else False
-        window_len = ds_config['window_len']
         preproc_mode = ds_config['preproc_mode'] if 'preproc_mode' in ds_config.keys() else None
-        window_pred = ds_config['window_pred'] if 'window_pred' in ds_config.keys() else not ds_config['unit_output']
-        hop = ds_config['hop'] if window_pred else 1
+        window_pred = ds_config.get('window_pred')
+        ds_config['hop'] = ds_config['hop'] if window_pred else 1
         data_path = get_data_path(global_data_path, dataset, preproc_mode = preproc_mode)
-        
-        # Load the sets (only for population evaluation)
-        train_set = CustomDataset(dataset, data_path, 'train', get_subjects(dataset), window=window_len, hop=hop, window_pred=window_pred, hrtf=hrtf)
-        test_set = CustomDataset(dataset, data_path, 'test',  get_subjects(dataset), window=window_len, hop=hop, window_pred=window_pred, hrtf=hrtf)
 
         for eval_window in window_list:
             
-            eeg_band = ds_config['eeg_band'] if 'eeg_band' in ds_config.keys() else None
             fixed = ds_config['fixed']
-            rnd_trials = ds_config['rnd_trials']
             batch_size = eval_window
-            lr = float(train_params['lr'])
-            loss_mode = train_params['loss_mode'] if 'loss_mode' in train_params.keys() else 'mean'
-            alpha = train_params['alpha_loss'] if 'alpha_loss' in train_params.keys() else 0
-            shuffle = ds_config['shuffle'] if 'shuffle' in ds_config.keys() else True
+            shuffle = ds_config['shuffle'] if window_pred else False
 
             # GET THE MODEL PATH
-            mdl_name = f'{model}_batch={train_params["batch_size"]}_block={ds_config["window_len"]}_lr={lr}'
-
-            # Add extensions to the model name depending on the params
-            if preproc_mode is not None: mdl_name += '_' + preproc_mode
-            if eeg_band is not None: mdl_name += '_' + eeg_band
-            if loss_mode != 'mean': mdl_name += '_' + loss_mode
-            if alpha != 0: mdl_name += '_alpha=' + str(alpha)
-            if rnd_trials: mdl_name += '_rnd'
-            if hrtf: mdl_name += '_hrtf'
+            mdl_name = get_mdl_name(run)
 
             dataset_name = dataset+'_fixed' if fixed else dataset
 
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
             for subj in selected_subj:
+
+                # Load the sets (only for population evaluation)
+                data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
+                train_set = CustomDataset(
+                    dataset=dataset,
+                    data_path=data_path,
+                    split='train',
+                    subjects=subj,
+                    **ds_config
+                )
+                test_set = CustomDataset(
+                    dataset=dataset,
+                    data_path=data_path,
+                    split='test',
+                    subjects=subj,
+                    **ds_config
+                )
 
                 if key == 'population':
                     print(f'Fitting classifier for {model} on all subjects with {dataset} data...')
@@ -108,7 +107,7 @@ def main(config, wandb_upload, dataset, key, finetuned, save_figures):
                         print(f'Fitting classifier for  {model} on {subj} with {dataset} data...')
                 
 
-                mdl_folder = os.path.join(mdl_load_path, dataset_name+'_data', mdl_name)
+                mdl_folder = os.path.join(mdl_load_path, dataset+'_data', mdl_name)
                 if key == 'population' and not finetuned:
                     mdl_filename = os.listdir(mdl_folder)[0] # only a single trained model
                 else:
@@ -127,9 +126,9 @@ def main(config, wandb_upload, dataset, key, finetuned, save_figures):
                 mdl.to(device)
                 mdl.eval()
                 
-                # DEFINE THE LOSS FUNCTION
-                criterion = CustomLoss(mode=loss_mode, window_pred=window_pred, alpha_end=alpha)
-                
+                # LOSS FUNCTION
+                criterion = CustomLoss(window_pred=ds_config.get('window_pred', True), **run['loss_params'])
+
                 # LOAD DATA
                 train_loader = DataLoader(train_set, batch_size, shuffle= shuffle, pin_memory=True)
                 
