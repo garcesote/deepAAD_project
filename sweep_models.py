@@ -35,8 +35,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
     early_stopping_patience = train_params['early_stopping_patience'] if early_stop else max_epoch
     preproc_mode = train_params.get('preproc_mode')
     batch_rnd_sampler = train_params.get('batch_rnd_sampler', False)
-    shuffle = train_params.get('preproc_mode')
-    
+    shuffle = train_params.get('shuffle', False)
 
     # Config dataset
     ds_config = run['dataset_params']
@@ -44,7 +43,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
     ds_config['leave_one_out'] = True if key == 'subj_independent' else False
     ds_val_config = ds_config
     if ds_config['window_pred'] == False: ds_val_config['hop'] = 1 
-    val_shuffle = shuffle if ds_config.get('window_pred') else 1
+    val_shuffle = shuffle if ds_config.get('window_pred') else False
 
     # Config loss
     loss_params = run['loss_params']

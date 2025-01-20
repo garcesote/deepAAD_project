@@ -56,7 +56,7 @@ def main(config, wandb_upload, dataset, key, finetuned, spatial_clsf):
         preproc_mode = train_params.get('preproc_mode')
         batch_size = train_params.get('batch_size')
         shuffle = train_params.get('shuffle')
-        shuffle_test = shuffle if ds_config.get('window_pred') else 1
+        shuffle_test = shuffle if ds_config.get('window_pred') else False
 
         # Config loss
         loss_params = run['loss_params']
@@ -85,7 +85,7 @@ def main(config, wandb_upload, dataset, key, finetuned, spatial_clsf):
         eval_mean_results = []
         
         # Evaluate the models for each subject independently on the dataset
-        selected_subjects = [get_subjects(dataset)[0]]
+        selected_subjects = get_subjects(dataset)
 
         # Define the time-shift for computing the null-distribution
         time_shift = 100
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/spatial_audio/ild_best_models.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/spatial_audio/locus_best_models.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")

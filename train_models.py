@@ -53,10 +53,10 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         weight_decay = float(train_config.get('weight_decay', 1e-8))
         scheduler_patience = train_config.get('scheduler_patience', 10)
         early_stopping_patience = train_config['early_stopping_patience'] if early_stop else max_epoch
-        batch_rnd_sampler = train_config['batch_rnd_sampler'] if 'batch_rnd_sampler' in train_config.keys() else False
+        batch_rnd_sampler = train_config.get('batch_rnd_sampler', False)
         preproc_mode = train_config.get('preproc_mode')
-        shuffle = train_config.get('preproc_mode')
-        val_shuffle = shuffle if ds_config.get('window_pred') else 1
+        shuffle = train_config.get('shuffle', False)
+        val_shuffle = shuffle if ds_config.get('window_pred') else False
 
         # Config dataset
         ds_config['leave_one_out'] = True if key == 'subj_independent' else False
@@ -160,6 +160,11 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
             train_mean_loss = []
             val_mean_loss = []
             val_decAccuracies = []
+
+            mdl_name = get_mdl_name(run)
+            prefix = model if key == 'population' else subj
+        
+            mdl_folder = os.path.join(mdl_save_path, dataset+'_data', mdl_name)
 
             # Training loop
             for epoch in range(max_epoch):
@@ -275,10 +280,6 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
             # Save best final model and metrics           
             if not tunning:
 
-                mdl_name = get_mdl_name(run)
-                prefix = model if key == 'population' else subj
-            
-                mdl_folder = os.path.join(mdl_save_path, dataset+'_data', mdl_name)
                 if not os.path.exists(mdl_folder):
                     os.makedirs(mdl_folder)
                 torch.save(

@@ -130,6 +130,7 @@ def get_mdl_name(config):
     if dataset_config.get('norm_hrtf_diff'): mdl_name = add_appendix(mdl_name, 'norm_diff')
     if dataset_config.get('fixed'): mdl_name = add_appendix(mdl_name, 'fixed')
     if dataset_config.get('rnd_trials'): mdl_name = add_appendix(mdl_name, 'rnd_trials')
+    if train_config.get('shuffle'): mdl_name = add_appendix(mdl_name, 'shuffle')
 
     return mdl_name
 

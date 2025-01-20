@@ -15,16 +15,16 @@ runs: # All models trained with window size of 5s
       weight_decay: 1e-08                      
       early_stopping_patience: 5
       scheduler_patience: 2
-      loss_mode: 'spatial_locus'
+      shuffle: True
     dataset_params:
-      window_len: 50  
-      hop: 1          
-      filt: False       
+      window: 50  
+      hop: 1                
       fixed: False      
       rnd_trials: False   
       window_pred: False
       spatial_locus: True
-      shuffle: True
+    loss_params:
+      mode: 'spatial_locus'
     model_params:
       F1: 16
       D: 8
