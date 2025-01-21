@@ -258,7 +258,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/spatial_audio/ild_criterion.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/spatial_audio/ild_best_models.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--figure", action='store_true', help="When included generate and save the figures of the classifier")    
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")

@@ -80,3 +80,5 @@ def plot_clsf_results(spatial_classifier, norm_metrics, labels, eval_window, acc
         if not os.path.exists(save_path):
             os.makedirs(save_path)
         plt.savefig(os.path.join(save_path, f'{eval_window//64}s.png'))
+
+    plt.close()

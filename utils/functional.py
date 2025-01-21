@@ -117,8 +117,9 @@ def get_mdl_name(config):
     train_config = config['train_params']
     dataset_config = config['dataset_params']
     loss_config = config['loss_params']
+    mdl_config = config['model_params']
 
-    mdl_name = f'{model}_batch={train_config["batch_size"]}_block={dataset_config["window"]}_lr={train_config["lr"]}'
+    mdl_name = f'{model}_batch={train_config["batch_size"]}_block={dataset_config["window"]}_lr={train_config["lr"]}_dr={mdl_config["dropout"]}'
     
     # Add extensions to the model name depending on the params
     if train_config.get('preproc_mode'): mdl_name = add_appendix(mdl_name, train_config.get('preproc_mode'))
