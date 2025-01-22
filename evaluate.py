@@ -176,12 +176,6 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
                     # SAVE RESULTS FOT MESD
                     dec_results.append(accuracies[2])
 
-                    # # LOG RESULTS
-                    # wandb_log = {'window': eval_window, 'accuracy': accuracies[2], 'accuracy_att': accuracies[0], 'accuracy_unattended': accuracies[1]}
-                    # # When evaluating per subject include the subject info on the log
-                    # wandb_log['subject'] = subj_name
-                    # if wandb_upload: wandb.log(wandb_log)
-
                     # SAVE FIGURES
                     if figures:
                         save_figures_path = os.path.join(global_path, 'figures', project, 'LDA', mdl_name) 
@@ -332,7 +326,8 @@ if __name__ == "__main__":
     wandb_upload = args.wandb
 
     # Introduce path to the mesd-toolbox
-    sys.path.append(r"C:\Users\jaulab\Desktop\AAD\mesd-toolbox\mesd-toolbox-python")
+    # sys.path.append("C:/Users/jaulab/Desktop/AAD/mesd-toolbox/mesd-toolbox-python")
+    sys.path.append("C:/Users/garce/Desktop/proyecto_2024/mesd-toolbox/mesd-toolbox-python")
     from mesd_toolbox import compute_MESD
     
     # Upload results to wandb

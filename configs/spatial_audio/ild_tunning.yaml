@@ -1,7 +1,10 @@
-global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
-global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+# global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
 # global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
 # global_data_path: 'D:\igarcia\AAD_Data'
+global_path: 'C:/Users/garce/Desktop/proyecto_2024/deepAAD_project'
+global_data_path: 'C:/Users/jaulab/Desktop/proyecto_2024/Data'
+
 
 exp_name: 'ild_tunning'
 

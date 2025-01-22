@@ -70,7 +70,6 @@ class CustomClassifier():
         ild_att_list = torch.zeros((len(loader)))
         ild_unatt_list = torch.zeros((len(loader)))
 
-        att_correct = 0
         train_loader_tqdm = tqdm(loader, desc='Computing model predictions to fit the classifier', leave=False, mininterval=0.5)
         with torch.no_grad():
             for batch, data in enumerate(train_loader_tqdm):
