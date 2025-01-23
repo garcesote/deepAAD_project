@@ -25,11 +25,12 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
     project = 'spatial_audio'
     exp_name = config['exp_name']
     # window_list = [64, 128, 320, 640, 1280, 2560] # 1s, 2s, 5s, 10s, 20s, 40s
-    # window_list = [64, 128, 320, 640, 1600, 3200] # 1s, 2s, 5s, 10s, 25s, 50s
-    window_list = [3200]
+    window_list = [64, 128, 320, 640, 1600, 3200] # 1s, 2s, 5s, 10s, 25s, 50s
+    # window_list = [3200]
 
-    spatial_clsf = True
-    figures = True
+    # spatial_clsf = True
+    # figures = True
+    # eval_population = True
     # finetuned = True
     
     # REPRODUCIBILITY
@@ -96,9 +97,6 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
         # Return to the original loss for evaluating
         run['loss_params']['mode'] = loss_mode
 
-        eval_results = {}
-        nd_results = {} # construct a null distribution when evaluating
-        dec_results = []
         eval_mean_results = []
         
         # Evaluate the models for each subject independently on the dataset
@@ -111,6 +109,10 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
         time_shift = 100
 
         for eval_window in window_list:
+
+            eval_results = {}
+            nd_results = {} # construct a null distribution when evaluating
+            dec_results = []
 
             for subj in selected_subjects:
                 
@@ -247,13 +249,13 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
 
                     print(f'Subject {subj_name} | corr_mean {mean(eval_loss)} | decode_accuracy {dec_accuracy}')
 
-                # SAVE RESULTS
-                if not os.path.exists(dst_save_path):
-                    os.makedirs(dst_save_path)
-                filename = str_win+'_Results'
-                json.dump(eval_results, open(os.path.join(dst_save_path, filename),'w'))
-                filename = str_win+'_nd_Results'
-                json.dump(nd_results, open(os.path.join(dst_save_path, filename),'w'))
+            # SAVE RESULTS
+            if not os.path.exists(dst_save_path):
+                os.makedirs(dst_save_path)
+            filename = str_win+'_Results'
+            json.dump(eval_results, open(os.path.join(dst_save_path, filename),'w'))
+            filename = str_win+'_nd_Results'
+            json.dump(nd_results, open(os.path.join(dst_save_path, filename),'w'))
 
             # SAVE ACCURACY RESULTS
             if not os.path.exists(decAcc_save_path):
@@ -264,8 +266,8 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
             # UPLOAD RESULTS TO WANDB
             if wandb_upload:
                 wandb_log = {'window': eval_window, 
-                                'decAcc_subj_mean': np.mean(dec_results), 
-                                'decAcc_subj_std': np.std(dec_results)
+                            'decAcc_subj_mean': np.mean(dec_results), 
+                            'decAcc_subj_std': np.std(dec_results)
                             }
                 # Upload the loss when not using the LDA
                 if not spatial_clsf:
