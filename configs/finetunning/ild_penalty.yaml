@@ -1,0 +1,100 @@
+global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
+# global_data_path: 'D:\igarcia\AAD_Data'
+# global_path: 'C:/Users/garce/Desktop/proyecto_2024/deepAAD_project'
+# global_data_path: 'C:/Users/jaulab/Desktop/proyecto_2024/Data'
+
+exp_name: 'ild_penalty_finetune'
+
+runs: # All models trained with window size of 5s
+
+  - model: 'CNN'
+    finetune_loss: 'corr_ild_mse_penalty'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 2e-05
+      weight_decay: 1e-08                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      shuffle: False
+      batch_rnd_sampler: True
+    dataset_params:
+      window: 50  
+      hop: 1                 
+      fixed: False      
+      rnd_trials: False   
+      window_pred: False
+      hrtf: True
+    loss_params:
+      mode: 'corr_ild_mse'
+      alpha_end: 0.02
+    model_params:
+      F1: 8
+      D: 16
+      AP1: 2
+      AP2: 4
+      dropout: 0.3
+      input_samples: 50
+      output_dim: 2
+
+  - model: 'CNN'
+    finetune_loss: 'corr_ild_mse'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 2e-05
+      weight_decay: 1e-08                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      shuffle: False
+      batch_rnd_sampler: True
+    dataset_params:
+      window: 50  
+      hop: 1                 
+      fixed: False      
+      rnd_trials: False   
+      window_pred: False
+      hrtf: True
+    loss_params:
+      mode: 'corr_ild_mse'
+      alpha_end: 0.02
+    model_params:
+      F1: 8
+      D: 16
+      AP1: 2
+      AP2: 4
+      dropout: 0.3
+      input_samples: 50
+      output_dim: 2
+
+  - model: 'CNN'
+    finetune_loss: 'corr_ild_mse_penalty_w'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 2e-05
+      weight_decay: 1e-08                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      shuffle: False
+      batch_rnd_sampler: True
+    dataset_params:
+      window: 50  
+      hop: 1                 
+      fixed: False      
+      rnd_trials: False   
+      window_pred: False
+      hrtf: True
+    loss_params:
+      mode: 'corr_ild_mse'
+      alpha_end: 0.02
+    model_params:
+      F1: 8
+      D: 16
+      AP1: 2
+      AP2: 4
+      dropout: 0.3
+      input_samples: 50
+      output_dim: 2

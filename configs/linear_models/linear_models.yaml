@@ -1,0 +1,23 @@
+global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
+# global_data_path: 'D:\igarcia\AAD_Data'
+
+runs:
+
+  - linear_model: 'CCA'
+    model_params:
+      encoder_len: 80
+      decoder_len: 16
+      n_components: 6
+    dataset_params:
+      fixed: False
+      rnd_trials: False
+
+  - linear_model: 'Ridge'
+    model_params:
+      start_lag: -26
+      end_lag: 0
+    dataset_params:
+      fixed: False
+      rnd_trials: False

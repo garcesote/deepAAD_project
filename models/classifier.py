@@ -1,5 +1,5 @@
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from utils.loss_functions import CustomLoss
 from torch.utils.data import DataLoader
 import torch
@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 class CustomClassifier():
 
-    def __init__(self, type, generation_model, criterion, batch_size = 128, shuffle = False, normalize = True):
+    def __init__(self, type, generation_model, criterion, batch_size = 128, shuffle = False, normalize = 'MinMax'):
         
         if type == 'LDA':
             self.classifier = LinearDiscriminantAnalysis()
@@ -22,8 +22,15 @@ class CustomClassifier():
 
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.normalize = normalize
-        self.scaler = MinMaxScaler() if normalize else None
+        if normalize == 'MinMax':
+            self.normalize = True
+            self.scaler = MinMaxScaler() 
+        elif normalize == 'Standardize':
+            self.normalize = True
+            self.scaler = StandardScaler() 
+        else:
+            self.normalize = False
+            self.scaler = None
 
     # Compute the metrics from the train set to train the classifier
     def fit(self, train_set):
@@ -41,7 +48,7 @@ class CustomClassifier():
         metrics, labels = self._get_metrics(test_set)
 
         if self.normalize:
-            metrics = self.scaler.fit_transform(metrics)
+            metrics = self.scaler.transform(metrics)
 
         loader_len = len(labels) // 2
 

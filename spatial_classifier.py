@@ -162,6 +162,7 @@ def main(config, wandb_upload, dataset, key, finetuned, save_figures):
                 metrics = torch.stack((corr_train, ild_train)).T
                 labels = torch.cat((torch.ones(len(train_loader)), torch.zeros(len(train_loader))))
 
+                # NORMALIZATION
                 scaler = MinMaxScaler()
                 norm_metrics = scaler.fit_transform(metrics)
 

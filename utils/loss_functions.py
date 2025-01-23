@@ -35,9 +35,11 @@ class CustomLoss(nn.Module):
 
         # assert preds.shape == targets.shape, "Predictions and targets must have same dimensions"
 
-        if not self.window_pred:
+        if not self.window_pred and not isinstance(targets, list):
             preds, targets = preds.T, targets.T # (n_stim, n_samples)
-
+        elif not self.window_pred and isinstance(targets, list):
+            preds, targets[0], targets[1] = preds.T, targets[0].T, targets[1].T # (n_stim, n_samples)
+        
         # Adjust alpha if necessary
         if self.adjust_alpha:
             alpha = (self.alpha_end - self.alpha_start) * epoch / self.total_epoch
@@ -103,6 +105,32 @@ class CustomLoss(nn.Module):
             corr = self._compute_correlation(preds, targets, eps)
             assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
             ild_mse = (self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets[0], targets[1]))**2
+            corr_loss = torch.mean(-corr)
+            loss = (1 - alpha) * corr_loss + alpha * ild_mse
+            return [loss, corr_loss, ild_mse]
+        
+        elif self.mode == 'corr_ild_mse_penalty':
+            assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
+            assert isinstance(targets, list), "When computing penalty loss tagets must include the attended and unattended"
+            targets_att = targets[0]
+            targets_unatt = targets[1]
+            corr = self._compute_correlation(preds, targets_att, eps)
+            ild_mse_att = (self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets_att[0], targets_att[1]))**2
+            ild_mse_unatt = (self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets_unatt[0], targets_unatt[1]))**2
+            ild_mse = 0.5 * (ild_mse_att - ild_mse_unatt)
+            corr_loss = torch.mean(-corr)
+            loss = (1 - alpha) * corr_loss + alpha * ild_mse
+            return [loss, corr_loss, ild_mse]
+        
+        elif self.mode == 'corr_ild_mse_penalty_w':
+            assert preds.shape[0] == 2, "When computing loss on ild mode 2 channels must be introduced"
+            assert isinstance(targets, list), "When computing penalty loss tagets must include the attended and unattended"            
+            targets_att = targets[0]
+            targets_unatt = targets[1]
+            corr = self._compute_correlation(preds, targets_att, eps)
+            ild_mse_att = (self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets_att[0], targets_att[1]))**2
+            ild_mse_unatt = (self._compute_ild(preds[0], preds[1]) - self._compute_ild(targets_unatt[0], targets_unatt[1]))**2
+            ild_mse = 0.5*(0.8 * ild_mse_att - 0.2 * ild_mse_unatt)
             corr_loss = torch.mean(-corr)
             loss = (1 - alpha) * corr_loss + alpha * ild_mse
             return [loss, corr_loss, ild_mse]

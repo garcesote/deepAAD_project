@@ -1,5 +1,0 @@
-{
-    "python.defaultInterpreterPath": "C:/Users/garce/AAD_Enviroment/Scripts/python.exe", // Ruta del entorno virtual
-    "terminal.integrated.defaultProfile.windows": "Command Prompt", // O "PowerShell" dependiendo de tu sistema
-    "python.terminal.activateEnvironment": true
-}

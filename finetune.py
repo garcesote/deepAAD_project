@@ -73,6 +73,10 @@ def main(config, wandb_upload, dataset, key, early_stop, lr_decay=0.5):
         # GET THE MODEL PATH
         mdl_name = get_mdl_name(run)
 
+        # Extract the finetunning loss if it's different after getting the model's name
+        run['loss_params']['mode'] = run.get('finetune_loss', loss_mode) # for the mdl_name when saving
+        loss_mode = run.get('finetune_loss', loss_mode)
+
         # Finetune the model with each subjetc of the dataset
         selected_subj = get_subjects(dataset)
 
@@ -172,12 +176,15 @@ def main(config, wandb_upload, dataset, key, early_stop, lr_decay=0.5):
                     
                     eeg = data['eeg'].to(device, dtype=torch.float)
                     stima = data['stima'].to(device, dtype=torch.float)
+                    stimb = data['stimb'].to(device, dtype=torch.float)
 
                     # Forward the model and calculate the loss corresponding to the neg. Pearson coef
                     with torch.autocast(device_type=device, dtype=torch.bfloat16):
                         preds = mdl(eeg)
+                    
+                    targets = [stima, stimb] if 'penalty' in loss_mode else stima
 
-                    loss_list = criterion(preds=preds, targets=stima)
+                    loss_list = criterion(preds=preds, targets=targets)
                     loss = loss_list[0]
 
                     optimizer.zero_grad()
@@ -192,6 +199,8 @@ def main(config, wandb_upload, dataset, key, early_stop, lr_decay=0.5):
 
                 mdl.eval()
                 val_loss = []
+                val_att_loss = 0
+                val_att_ild = 0
                 val_att_corr = 0
 
                 # Validation
@@ -201,36 +210,51 @@ def main(config, wandb_upload, dataset, key, early_stop, lr_decay=0.5):
 
                         eeg = data['eeg'].to(device, dtype=torch.float)
                         stima = data['stima'].to(device, dtype=torch.float)
+                        stimb = data['stimb'].to(device, dtype=torch.float)
 
                         preds = mdl(eeg)
 
-                        loss_list = criterion(preds=preds, targets=stima)
+                        targets = [stima, stimb] if 'penalty' in loss_mode else stima
+
+                        loss_list = criterion(preds=preds, targets = targets)
                         loss = loss_list[0]
                         
-                        if data['stimb'] is not None:
+                        if stimb is not None:
                             if loss_mode != 'spatial_locus':
-                                stimb = data['stimb'].to(device, dtype=torch.float)
                                 # Decoding accuracy of the model
-                                unat_loss = criterion(preds=preds, targets = stimb)[0]
+                                targets_unatt = [stimb, stima] if 'penalty' in loss_mode else stimb
+                                unat_loss_list = criterion(preds=preds, targets = targets_unatt)
+                                unat_loss = unat_loss_list[0]
                                 if loss.item() < unat_loss.item():
-                                    val_att_corr += 1
+                                    val_att_loss += 1
+                                # When multiple loss compute the accuracy for each metric
+                                if len(loss_list) > 1:
+                                    if loss_list[1].item() < unat_loss_list[1].item():
+                                        val_att_corr += 1
+                                    if loss_list[2].item() < unat_loss_list[2].item():
+                                        val_att_ild += 1
                             else:
                                 probs = F.sigmoid(preds)
                                 pred_labels = (probs >= 0.5).float()
                                 n_correct = torch.sum(pred_labels == stima)
                                 if n_correct > batch_size // 2:
-                                    val_att_corr += 1
+                                    val_att_loss += 1
 
                         val_loss.append(loss_list)
 
                 mean_val_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in val_loss])).item()
                 mean_train_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in train_loss])).item()
-                val_decAccuracy = val_att_corr / len(val_loader) * 100
+                val_decAccuracy = val_att_loss / len(val_loader) * 100
+                val_corr_decAccuracy = val_att_corr / len(val_loader) * 100
+                val_ild_decAccuracy = val_att_ild / len(val_loader) * 100
 
                 scheduler.step(-mean_val_loss)
 
                 # Logging metrics
-                print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
+                if multiple_loss_opt(loss_mode):
+                    print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f} | Val ild_acc: {val_ild_decAccuracy} | Val corr_acc: {val_corr_decAccuracy}')
+                else:
+                    print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
                 
                 if wandb_upload:
                     wandb_log = {'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
@@ -238,8 +262,10 @@ def main(config, wandb_upload, dataset, key, early_stop, lr_decay=0.5):
                     if multiple_loss_opt(loss_mode):
                         wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
                         wandb_log['train_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in train_loss])).item()
+                        wandb_log['val_acc_corr'] = val_corr_decAccuracy
                         wandb_log['val_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in val_loss])).item()
                         wandb_log['train_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in train_loss])).item()
+                        wandb_log['val_acc_ild'] = val_ild_decAccuracy
                     wandb.log(wandb_log)
 
                 train_mean_loss.append(mean_train_loss)
@@ -254,10 +280,10 @@ def main(config, wandb_upload, dataset, key, early_stop, lr_decay=0.5):
                     best_state_dict = mdl.state_dict()
             
             # Save best final model
-            mdl_name = get_mdl_name(run)
+            mdl_save_name = get_mdl_name(run)
             prefix = subj
         
-            mdl_folder = os.path.join(mdl_save_path, dataset+'_data', mdl_name)
+            mdl_folder = os.path.join(mdl_save_path, dataset+'_data', mdl_save_name)
             if not os.path.exists(mdl_folder):
                 os.makedirs(mdl_folder)
             torch.save(
@@ -266,10 +292,10 @@ def main(config, wandb_upload, dataset, key, early_stop, lr_decay=0.5):
             )
 
             # Save corresponding train and val metrics
-            val_folder = os.path.join(metrics_save_path, dataset+'_data', mdl_name, 'val')
+            val_folder = os.path.join(metrics_save_path, dataset+'_data', mdl_save_name, 'val')
             if not os.path.exists(val_folder):
                 os.makedirs(val_folder)
-            train_folder = os.path.join(metrics_save_path, dataset+'_data', mdl_name, 'train')
+            train_folder = os.path.join(metrics_save_path, dataset+'_data', mdl_save_name, 'train')
             if not os.path.exists(train_folder):
                 os.makedirs(train_folder)
             json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
@@ -285,10 +311,10 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/spatial_audio/ild_tunning.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/finetunning/ild_penalty.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--lr_decay", type=float, default=10, help="Scaling factor for the lr finetunning")
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     

@@ -38,6 +38,7 @@ def main(
         data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
 
         window_list = [64, 128, 320, 640, 1280, 2560]
+        # window_list = [64, 128, 320, 640, 1600, 3200]
         # window_list = [64, 2560]
         time_shift = 100 # Null distribution
         leave_one_out = True if key == 'subj_independent' else False # Attention! This parameter change the whole sim. (read doc)
@@ -184,7 +185,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Definir los argumentos que quieres aceptar
-    parser.add_argument("--config", type=str, default='configs/spatial_audio/eval_mesd_linear.yaml')
+    parser.add_argument("--config", type=str, default='configs/linear_models/linear_models.yaml')
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")

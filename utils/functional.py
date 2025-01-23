@@ -279,4 +279,4 @@ def set_seeds(seed: int=42):
     np.random.seed(seed)
 
 def multiple_loss_opt(loss_mode:str):
-    return loss_mode in ['ressamble', 'corr_ild_mae', 'corr_ild_mse', 'corr_diff_mse', 'corr_diff_mae']
+    return loss_mode in ['ressamble', 'corr_ild_mae', 'corr_ild_mse', 'corr_ild_mse_penalty', 'corr_ild_mse_penalty_w', 'corr_diff_mse', 'corr_diff_mae']

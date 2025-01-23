@@ -26,7 +26,11 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
     exp_name = config['exp_name']
     # window_list = [64, 128, 320, 640, 1280, 2560] # 1s, 2s, 5s, 10s, 20s, 40s
     # window_list = [64, 128, 320, 640, 1600, 3200] # 1s, 2s, 5s, 10s, 25s, 50s
-    window_list = [64, 128, 320, 640, 1600, 3200]
+    window_list = [3200]
+
+    spatial_clsf = True
+    figures = True
+    # finetuned = True
     
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
@@ -40,9 +44,6 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
         # Global params
         model = run['model']
         mdl_load_folder = 'finetune_models' if finetuned else 'models'
-
-        mdl_load_path = os.path.join(global_path, 'results', project, key, mdl_load_folder)
-        mdl_name = get_mdl_name(run)
 
         tag = 'evaluation_finetune' if finetuned else 'evaluation'
         tag = tag + '_spatial_clsf' if spatial_clsf else tag
@@ -63,6 +64,7 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
         batch_size = train_params.get('batch_size')
         shuffle = train_params.get('shuffle')
         shuffle_test = shuffle if ds_config.get('window_pred') else False
+        metrics_norm = train_params.get('metrics_norm', None)
 
         # Config loss
         loss_params = run['loss_params']
@@ -76,21 +78,28 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         # GET THE MODEL PATH
+        mdl_load_path = os.path.join(global_path, 'results', project, key, mdl_load_folder)
+        # If the finetunning loss is different from the original
+        run['loss_params']['mode'] = run.get('finetune_loss', loss_mode)
+        mdl_name = get_mdl_name(run)
+
         if finetuned:
             eval_path, dec_path = 'eval_finetuned_metrics', 'decode_finetuned_accuracy'  
         else:
             eval_path, dec_path = 'eval_metrics', 'decode_accuracy'
 
         # DEFINE THE SAVE PATH
-        dst_save_path = os.path.join(global_path, 'results', project, key, eval_path, dataset+'_data', mdl_name)
-        decAcc_save_path = os.path.join(global_path, 'results', project, key, dec_path, dataset+'_data', mdl_name)
+        mdl_save_name = mdl_name + '_' + metrics_norm if metrics_norm is not None else mdl_name
+        dst_save_path = os.path.join(global_path, 'results', project, key, eval_path, dataset+'_data', mdl_save_name)
+        decAcc_save_path = os.path.join(global_path, 'results', project, key, dec_path, dataset+'_data', mdl_save_name)
+
+        # Return to the original loss for evaluating
+        run['loss_params']['mode'] = loss_mode
 
         eval_results = {}
         nd_results = {} # construct a null distribution when evaluating
         dec_results = []
         eval_mean_results = []
-
-        # eval_population = True
         
         # Evaluate the models for each subject independently on the dataset
         if eval_population:
@@ -110,7 +119,7 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
 
                 print(f'Evaluating {model} on window {eval_window//64}s with {dataset} dataset for subj {subj_name}')
 
-                if loss_mode is not None: print(f'Optimizing the network based on {loss_mode} criterion')
+                if loss_mode is not None: print(f'Evaluating the network based on {loss_mode} criterion')
 
                 mdl_folder = os.path.join(mdl_load_path, dataset+'_data', mdl_name)
                 if key == 'population' and not finetuned:
@@ -152,13 +161,10 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
                 # LOSS FUNCTION
                 criterion = CustomLoss(window_pred=ds_config.get('window_pred', True), **run['loss_params'])
 
-                spatial_clsf = True
-                # figures = True
-
                 # WHEN MULTIPLE METRICS OPTIMIZED USE A LINEAR CLASSIFIER
                 if spatial_clsf and multiple_loss_opt(loss_mode):
                     
-                    classifier = CustomClassifier('LDA', mdl, criterion, batch_size=eval_window, shuffle=shuffle_test, normalize=True)
+                    classifier = CustomClassifier('LDA', mdl, criterion, batch_size=eval_window, shuffle=shuffle_test, normalize=metrics_norm)
 
                     # LOAD TRAIN DATA AND FIT CLASSIFIER
                     train_set = CustomDataset(
@@ -178,7 +184,8 @@ def main(config, wandb_upload, dataset, key, eval_population, finetuned, spatial
 
                     # SAVE FIGURES
                     if figures:
-                        save_figures_path = os.path.join(global_path, 'figures', project, 'LDA', mdl_name) 
+                        clsf_name = 'LDA_trial' if not finetuned else 'LDA_finetuned'
+                        save_figures_path = os.path.join(global_path, 'figures', project, clsf_name, mdl_save_name) 
                         save_figures_path =  os.path.join(save_figures_path, 'population') if isinstance(subj, list) else os.path.join(save_figures_path, subj) 
                         plot_clsf_results(classifier.classifier, metrics, labels, eval_window, accuracies, save_figures_path)
 
@@ -312,7 +319,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/spatial_audio/ild_best_models.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/finetunning/ild_penalty.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
@@ -326,8 +333,8 @@ if __name__ == "__main__":
     wandb_upload = args.wandb
 
     # Introduce path to the mesd-toolbox
-    # sys.path.append("C:/Users/jaulab/Desktop/AAD/mesd-toolbox/mesd-toolbox-python")
-    sys.path.append("C:/Users/garce/Desktop/proyecto_2024/mesd-toolbox/mesd-toolbox-python")
+    sys.path.append("C:/Users/jaulab/Desktop/AAD/mesd-toolbox/mesd-toolbox-python")
+    # sys.path.append("C:/Users/garce/Desktop/proyecto_2024/mesd-toolbox/mesd-toolbox-python")
     from mesd_toolbox import compute_MESD
     
     # Upload results to wandb

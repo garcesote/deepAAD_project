@@ -188,7 +188,9 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                     with torch.autocast(device_type=device, dtype=torch.bfloat16):
                         preds = mdl(eeg)
 
-                    loss_list = criterion(preds=preds, targets=stima)
+                    targets = [stima, stimb] if 'penalty' in loss_mode else stima
+
+                    loss_list = criterion(preds=preds, targets = targets)
                     loss = loss_list[0]
 
                     optimizer.zero_grad()
@@ -217,7 +219,9 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
 
                         preds = mdl(eeg)
 
-                        loss_list = criterion(preds=preds, targets = stima)
+                        targets = [stima, stimb] if 'penalty' in loss_mode else stima
+
+                        loss_list = criterion(preds=preds, targets = targets)
                         loss = loss_list[0]
                         
                         if data['stimb'] is not None:
@@ -252,7 +256,10 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                 scheduler.step(-mean_val_loss)
 
                 # Logging metrics
-                print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
+                if multiple_loss_opt(loss_mode):
+                    print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f} | Val ild_acc: {val_ild_decAccuracy} | Val corr_acc: {val_corr_decAccuracy}')
+                else:
+                    print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
                 
                 if wandb_upload:
                     wandb_log = {'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
