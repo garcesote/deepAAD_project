@@ -290,7 +290,7 @@ class CustomDataset(Dataset):
                 else: raise ValueError('Introduce a valid split name between train val or test')
         
         eeg_cat = torch.cat(eeg).T
-        stima_cat = torch.squeeze(torch.cat(stim))
+        stima_cat = torch.cat(stim).T
         
         return eeg_cat, stima_cat
     

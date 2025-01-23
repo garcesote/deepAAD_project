@@ -3,10 +3,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from models.dnn import FCNN, CNN
-from models.vlaai import VLAAI
-from models.eeg_conformer import Conformer, ConformerConfig
-from utils.functional import get_mdl_name, multiple_loss_opt, get_data_path, get_channels, get_subjects, set_seeds, get_loss
+from utils.functional import load_model, get_mdl_name, multiple_loss_opt, get_data_path, get_channels, get_subjects, set_seeds, get_loss
 from utils.datasets import CustomDataset
 from utils.sampler import BatchRandomSampler
 from utils.loss_functions import CustomLoss
@@ -22,7 +19,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'spatial_audio'
+    project = 'euroacustics'
     config['dataset'] = dataset
     exp_name = config['exp_name']
     config['key'] = key
@@ -90,22 +87,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
             # LOAD THE MODEL
-            if model == 'FCNN':
-                run['model_params']['n_chan'] = get_channels(dataset)
-                mdl = FCNN(**run['model_params'])
-            elif model == 'CNN':
-                run['model_params']['input_channels'] = get_channels(dataset)
-                mdl = CNN(**run['model_params'])
-            elif model == 'VLAAI':
-                run['model_params']['input_channels'] = get_channels(dataset)
-                mdl = VLAAI(**run['model_params'])
-            elif model == 'Conformer':
-                run['model_params']['eeg_channels'] = get_channels(dataset)
-                run['model_params']['kernel_chan'] = get_channels(dataset)
-                mdl_config = ConformerConfig(**run['model_params'])
-                mdl = Conformer(mdl_config)
-            else:
-                raise ValueError('Introduce a valid model')
+            mdl = load_model(run, dataset)
             
             mdl.to(device)
             mdl_size = sum(p.numel() for p in mdl.parameters())
@@ -224,7 +206,7 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
                         loss_list = criterion(preds=preds, targets = targets)
                         loss = loss_list[0]
                         
-                        if data['stimb'] is not None:
+                        if data.get('stimb'):
                             if loss_mode != 'spatial_locus':
                                 stimb = data['stimb'].to(device, dtype=torch.float)
                                 # Decoding accuracy of the model
@@ -313,13 +295,13 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/spatial_audio/ild_best_models.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/euroacustics/vlaai_pytorch.yaml", help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
-    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--dataset", type=str, default='skl', help="Dataset")
+    parser.add_argument("--key", type=str, default='subject_specific', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
 

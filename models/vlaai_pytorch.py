@@ -38,9 +38,9 @@ class OutputContext(nn.Module):
         return self.activation(x)
 
 class VLAAI(nn.Module):
-    def __init__(self, nb_blocks=4, input_channels=64, output_dim=1, use_skip=True, extractor_output = 128):
+    def __init__(self, n_blocks=4, input_channels=64, output_dim=1, use_skip=True, extractor_output = 128):
         super(VLAAI, self).__init__()
-        self.nb_blocks = nb_blocks
+        self.n_blocks = n_blocks
         self.use_skip = use_skip
         self.extractor = Extractor(input_channels=input_channels)
         self.dense = nn.Linear(extractor_output, input_channels)  # Equivalent of Dense in TF
@@ -48,7 +48,7 @@ class VLAAI(nn.Module):
         self.final_dense = nn.Linear(input_channels, output_dim)
 
     def forward(self, x):
-        for _ in range(self.nb_blocks):
+        for _ in range(self.n_blocks):
             skip = x if self.use_skip else 0
             x = self.extractor(x + skip)
             x = x.transpose(1, 2)
@@ -58,4 +58,5 @@ class VLAAI(nn.Module):
         x = x.transpose(1, 2)
         x = self.final_dense(x)
         x = x.transpose(1, 2)
+        x = torch.squeeze(x)
         return x

@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
 import numpy as np
-import scipy
-from utils.functional import get_loss
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 # model description

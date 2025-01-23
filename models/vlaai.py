@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from utils.functional import get_loss
 
 class LayerNorm_perm(nn.Module):
 

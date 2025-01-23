@@ -6,10 +6,7 @@ import argparse
 import yaml
 import wandb
 
-from models.dnn import FCNN, CNN
-from models.vlaai import VLAAI
-from models.eeg_conformer import Conformer, ConformerConfig
-from utils.functional import multiple_loss_opt, get_data_path, get_channels, get_subjects, set_seeds, get_loss
+from utils.functional import load_model, multiple_loss_opt, get_data_path, get_channels, get_subjects, set_seeds, get_loss
 from utils.datasets import CustomDataset
 from utils.sampler import BatchRandomSampler
 
@@ -72,33 +69,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         # LOAD THE MODEL
-        if model == 'FCNN':
-            run['model_params']['n_chan'] = get_channels(dataset)
-            mdl = FCNN(**run['model_params'])
-        elif model == 'CNN':
-
-            # Config model
-            mdl_config = run['model_params']
-            mdl_config['dropout'] = getattr(wandb.config, 'dropout', mdl_config['dropout'])
-            mdl_config['input_samples'] = getattr(wandb.config, 'input_samples', mdl_config['input_samples'])
-            mdl_config['F1'] = getattr(wandb.config, 'F1', mdl_config['F1'])
-            mdl_config['D'] = getattr(wandb.config, 'D', mdl_config['D'])
-            mdl_config['AP1'] = getattr(wandb.config, 'AP1', mdl_config['AP1'])
-            mdl_config['AP2'] = getattr(wandb.config, 'AP2', mdl_config['AP2'])
-
-            run['model_params']['input_channels'] = get_channels(dataset)
-            mdl = CNN(**run['model_params'])
-            
-        elif model == 'VLAAI':
-            run['model_params']['input_channels'] = get_channels(dataset)
-            mdl = VLAAI(**run['model_params'])
-        elif model == 'Conformer':
-            run['model_params']['eeg_channels'] = get_channels(dataset)
-            run['model_params']['kernel_chan'] = get_channels(dataset)
-            mdl_config = ConformerConfig(**run['model_params'])
-            mdl = Conformer(mdl_config)
-        else:
-            raise ValueError('Introduce a valid model')
+        mdl = load_model(run, dataset)
 
         mdl.to(device)
         mdl_size = sum(p.numel() for p in mdl.parameters())

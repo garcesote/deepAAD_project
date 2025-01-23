@@ -2,6 +2,12 @@ import torch
 import numpy as np
 import os
 import argparse
+import wandb
+
+from models.dnn import FCNN, CNN
+from models.vlaai import VLAAI
+from models.vlaai_pytorch import VLAAI as VLAAI_pytorch
+from models.eeg_conformer import Conformer, ConformerConfig
 
 # turn a tensor to 0 mean and std of 1 with shape (C, T) and return shape (C)   
 def normalize_eeg(tensor: torch.tensor):
@@ -119,7 +125,9 @@ def get_mdl_name(config):
     loss_config = config['loss_params']
     mdl_config = config['model_params']
 
-    mdl_name = f'{model}_batch={train_config["batch_size"]}_block={dataset_config["window"]}_lr={train_config["lr"]}_dr={mdl_config["dropout"]}'
+    mdl_name = f'{model}_batch={train_config["batch_size"]}_block={dataset_config["window"]}_lr={train_config["lr"]}'
+    
+    if mdl_config.get('dropout'): mdl_name = add_appendix(mdl_name, mdl_config.get('dropout'))
     
     # Add extensions to the model name depending on the params
     if train_config.get('preproc_mode'): mdl_name = add_appendix(mdl_name, train_config.get('preproc_mode'))
@@ -143,6 +151,43 @@ def compute_ild(left_channel, right_channel):
     # Calculate ILD in dB
     ild = 10 * np.log10(rms_left / rms_right)
     return ild
+
+def load_model(config_run, dataset):
+
+    if config_run['model'] == 'FCNN':
+        config_run['model_params']['n_chan'] = get_channels(dataset)
+        mdl = FCNN(**config_run['model_params'])
+
+    elif config_run['model'] == 'CNN':
+        # Sweep params implemented
+        mdl_config = config_run['model_params']
+        mdl_config['dropout'] = getattr(wandb.config, 'dropout', mdl_config.get('dropout'))
+        mdl_config['input_samples'] = getattr(wandb.config, 'input_samples', mdl_config.get('input_samples'))
+        mdl_config['F1'] = getattr(wandb.config, 'F1', mdl_config.get('F1'))
+        mdl_config['D'] = getattr(wandb.config, 'D', mdl_config.get('D'))
+        mdl_config['AP1'] = getattr(wandb.config, 'AP1', mdl_config.get('AP1'))
+        mdl_config['AP2'] = getattr(wandb.config, 'AP2', mdl_config.get('AP2'))
+        config_run['model_params']['input_channels'] = get_channels(dataset)
+        mdl = CNN(**config_run['model_params'])
+
+    elif config_run['model'] == 'VLAAI':
+        config_run['model_params']['input_channels'] = get_channels(dataset)
+        mdl = VLAAI(**config_run['model_params'])
+
+    elif config_run['model'] == 'VLAAI_pytorch':
+        config_run['model_params']['input_channels'] = get_channels(dataset)
+        mdl = VLAAI_pytorch(**config_run['model_params'])
+
+    elif config_run['model'] == 'Conformer':
+        config_run['model_params']['eeg_channels'] = get_channels(dataset)
+        config_run['model_params']['kernel_chan'] = get_channels(dataset)
+        mdl_config = ConformerConfig(**config_run['model_params'])
+        mdl = Conformer(mdl_config)
+
+    else:
+        raise ValueError('Introduce a valid model')
+    
+    return mdl
 
 # Calculates the pearson correlation between two tensors
 def get_loss(x: torch.tensor, y: torch.tensor, eps=1e-8, window_pred=False, mode='mean', alpha=None):

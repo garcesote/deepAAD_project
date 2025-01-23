@@ -3,13 +3,10 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from utils.functional import get_mdl_name, multiple_loss_opt, set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
+from utils.functional import load_model, get_mdl_name, multiple_loss_opt, set_seeds, get_data_path, get_channels, get_subjects, get_filename, get_loss
 from utils.datasets import CustomDataset
 from utils.loss_functions import CustomLoss
 from utils.sampler import BatchRandomSampler
-from models.dnn import FCNN, CNN
-from models.vlaai import VLAAI
-from models.eeg_conformer import Conformer, ConformerConfig
 
 from tqdm import tqdm
 import argparse
@@ -92,22 +89,7 @@ def main(config, wandb_upload, dataset, key, early_stop, lr_decay=0.5):
                 mdl_filename = get_filename(mdl_folder, subj) # search for the model related with the subj
             
             # LOAD THE MODEL
-            if model == 'FCNN':
-                run['model_params']['n_chan'] = get_channels(dataset)
-                mdl = FCNN(**run['model_params'])
-            elif model == 'CNN':
-                run['model_params']['input_channels'] = get_channels(dataset)
-                mdl = CNN(**run['model_params'])
-            elif model == 'VLAAI':
-                run['model_params']['input_channels'] = get_channels(dataset)
-                mdl = VLAAI(**run['model_params'])
-            elif model == 'Conformer':
-                run['model_params']['kernel_chan'] = get_channels(dataset)
-                run['model_params']['eeg_channels'] = get_channels(dataset)
-                mdl_config = ConformerConfig(**run['model_params'])
-                mdl = Conformer(mdl_config)
-            else:
-                raise ValueError('Introduce a valid model')
+            mdl = load_model(run, dataset)
 
             mdl.load_state_dict(torch.load(os.path.join(mdl_folder, mdl_filename), map_location=torch.device(device)))
             mdl.to(device)
