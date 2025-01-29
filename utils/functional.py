@@ -28,41 +28,59 @@ def normalize_stim(tensor: torch.tensor):
 
 jaulab_fixed_trials = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 80, 81, 82, 83, 88, 89, 90, 91]
 # Return the required trials for splitting correctly the dataset introducing the set
-def get_trials(split: str, n_trials: int, shuffle: bool = False, fixed:bool = False, dataset:str = None):
+def get_trials(split: str, n_trials: int, cv_fold: int = None, shuffle: bool = False, fixed:bool = False, dataset:str = None):
 
-    partitions = [0.8, 0.10, 0.10] # sum to 1
+    if cv_fold is None:
+        partitions = [0.8, 0.10, 0.10] # sum to 1
 
-    if fixed:
-        n_trials = len(jaulab_fixed_trials)
-        trials = jaulab_fixed_trials
-    else:
-        trials = np.arange(0, n_trials)
-
-    sizes = [int(n_trials * p) for p in partitions]
-    sizes[0] = n_trials - sum(sizes[1:]) # Add resting samples to the train set
-    
-    # Get random indices from a file containing the indices generated randomly from 0 to n_trials
-    if shuffle:
-        assert(dataset is not None)
-        seed = 1
-        if not fixed:
-            path = 'rnd_indices/'+dataset+'_shuffle_idx_seed='+str(seed)
+        if fixed:
+            n_trials = len(jaulab_fixed_trials)
+            trials = jaulab_fixed_trials
         else:
-            path = 'rnd_indices/'+dataset+'_fixed_shuffle_idx_seed='+str(seed)
-        indices = torch.load(path)
-    else:
-        indices = np.arange(0, n_trials)
+            trials = np.arange(0, n_trials)
 
-    if split == 'train':
-        return np.array([trials[idx] for idx in indices[:sizes[0]]])
-    elif split == 'val':
-        return np.array([trials[idx] for idx in indices[sizes[0]:n_trials-sizes[1]]])
-    elif split == 'test':
-        return np.array([trials[idx] for idx in indices[n_trials-sizes[1]:n_trials]])
-    elif split == 'all':
-        return np.array([trials[idx] for idx in indices])
-    else:
-        raise ValueError('Field split must be a train/val/test/all value')
+        sizes = [int(n_trials * p) for p in partitions]
+        sizes[0] = n_trials - sum(sizes[1:]) # Add resting samples to the train set
+        
+        # Get random indices from a file containing the indices generated randomly from 0 to n_trials
+        if shuffle:
+            assert(dataset is not None)
+            seed = 1
+            if not fixed:
+                path = 'rnd_indices/'+dataset+'_shuffle_idx_seed='+str(seed)
+            else:
+                path = 'rnd_indices/'+dataset+'_fixed_shuffle_idx_seed='+str(seed)
+            indices = torch.load(path)
+        else:
+            indices = np.arange(0, n_trials)
+
+        if split == 'train':
+            return  np.array([trials[idx] for idx in indices[:sizes[0]]])
+        elif split == 'val':
+            return  np.array([trials[idx] for idx in indices[sizes[0]:n_trials-sizes[1]]])
+        elif split == 'test':
+            return  np.array([trials[idx] for idx in indices[n_trials-sizes[1]:n_trials]])
+        elif split == 'all':
+            return  np.array([trials[idx] for idx in indices])
+        else:
+            raise ValueError('Field split must be a train/val/test/all value')
+
+    # 5 cross validation fold
+    else: 
+        trials_per_fold = n_trials // 5
+        blocks = np.array([np.arange(n * trials_per_fold, (n + 1) * trials_per_fold) for n in range(5)])
+        blocks = np.roll(blocks, cv_fold, axis=0)
+
+        if split == 'train':
+            return np.concatenate(blocks[:3])
+        elif split == 'val':
+            return blocks[3]
+        elif split == 'test':
+            return blocks[4]
+        elif split == 'all':
+            return np.concatenate(blocks)
+        else:
+            raise ValueError('Field split must be a train/val/test/all value')
         
 # Return the required trials for splitting correctly the dataset introducing the set when population
 def get_leave_one_out_trials(split: str, n_trials: int, alternate: bool = False, fixed:bool = False):
@@ -90,7 +108,28 @@ def get_leave_one_out_trials(split: str, n_trials: int, alternate: bool = False,
             return np.array([trials[idx] for idx in range(1, n_trials, 2)])
     else:
         raise ValueError('Field split must be a train/val/test value')
-    
+
+def verbose(mode, key, subj, dataset, model, window=None, loss_mode=None):
+
+    if mode == 'train':
+        prefix = 'Training'
+    elif mode == 'finetune':
+        prefix = 'Finetunning'
+    elif mode == 'evaluate':
+        prefix = f'Evaluating on window {window}'
+    else: raise ValueError('Mode must be train/finetune/evaluate')
+
+    if key == 'population':
+        print(f'{prefix} {model} on all subjects with {dataset} data...')
+    elif key == 'subj_independent':
+        print(f'{prefix} {model} leaving out {subj} with {dataset} data...')
+    elif key == 'subj_specific':
+        print(f'{prefix} {model} on {subj} with {dataset} data...')
+    else: raise ValueError('Key must be population/subj_specific/subj_independent')
+
+    if loss_mode is not None:
+        print(f'Using criterion: {loss_mode}')
+
 # introduce subject index like 'S1' and return index like 'sub-001'
 def get_SKL_subj_idx(subject):
     idx = subject[1:]
@@ -127,7 +166,7 @@ def get_mdl_name(config):
 
     mdl_name = f'{model}_batch={train_config["batch_size"]}_block={dataset_config["window"]}_lr={train_config["lr"]}'
     
-    if mdl_config.get('dropout'): mdl_name = add_appendix(mdl_name, mdl_config.get('dropout'))
+    if mdl_config.get('dropout'): mdl_name = add_appendix(mdl_name, 'dr=' + str(mdl_config.get('dropout')))
     
     # Add extensions to the model name depending on the params
     if train_config.get('preproc_mode'): mdl_name = add_appendix(mdl_name, train_config.get('preproc_mode'))
@@ -152,22 +191,23 @@ def compute_ild(left_channel, right_channel):
     ild = 10 * np.log10(rms_left / rms_right)
     return ild
 
-def load_model(config_run, dataset):
+def load_model(config_run, dataset, wandb_upload):
 
     if config_run['model'] == 'FCNN':
         config_run['model_params']['n_chan'] = get_channels(dataset)
         mdl = FCNN(**config_run['model_params'])
 
     elif config_run['model'] == 'CNN':
-        # Sweep params implemented
-        mdl_config = config_run['model_params']
-        mdl_config['dropout'] = getattr(wandb.config, 'dropout', mdl_config.get('dropout'))
-        mdl_config['input_samples'] = getattr(wandb.config, 'input_samples', mdl_config.get('input_samples'))
-        mdl_config['F1'] = getattr(wandb.config, 'F1', mdl_config.get('F1'))
-        mdl_config['D'] = getattr(wandb.config, 'D', mdl_config.get('D'))
-        mdl_config['AP1'] = getattr(wandb.config, 'AP1', mdl_config.get('AP1'))
-        mdl_config['AP2'] = getattr(wandb.config, 'AP2', mdl_config.get('AP2'))
-        config_run['model_params']['input_channels'] = get_channels(dataset)
+        if wandb_upload:
+            # Sweep params implemented
+            mdl_config = config_run['model_params']
+            mdl_config['dropout'] = getattr(wandb.config, 'dropout', mdl_config.get('dropout'))
+            mdl_config['input_samples'] = getattr(wandb.config, 'input_samples', mdl_config.get('input_samples'))
+            mdl_config['F1'] = getattr(wandb.config, 'F1', mdl_config.get('F1'))
+            mdl_config['D'] = getattr(wandb.config, 'D', mdl_config.get('D'))
+            mdl_config['AP1'] = getattr(wandb.config, 'AP1', mdl_config.get('AP1'))
+            mdl_config['AP2'] = getattr(wandb.config, 'AP2', mdl_config.get('AP2'))
+            config_run['model_params']['input_channels'] = get_channels(dataset)
         mdl = CNN(**config_run['model_params'])
 
     elif config_run['model'] == 'VLAAI':
@@ -188,74 +228,24 @@ def load_model(config_run, dataset):
         raise ValueError('Introduce a valid model')
     
     return mdl
-
-# Calculates the pearson correlation between two tensors
-def get_loss(x: torch.tensor, y: torch.tensor, eps=1e-8, window_pred=False, mode='mean', alpha=None):
-
-    """Correlation function that returns calculation the Person's coef
-    
-    Params
-    ----------
-
-    x, y: tensor
-        two vectors for calculating the correlation, must have the same dims
-        In stim case dims introduce (n_stim, n_samples) where in case of unit
-        output n_stim=1, case hrtf n_stim=2, case window_pred n_stim=batch_size
-
-    eps: 1e-8 by default applied on the formula
-    
-    window_pred: bool
-        when the window is estimated there's no need for transpose dims
-
-    mode: str Select the loss operating mode:
-        - 'mean': return the mean of the computed loss
-        - 'ressamble': force the model to have similar coefficients meaning similar behaviour
-        - 'ild': add an ild coefficient to the correlation mean of the channels
-        - 'ressamble_ild': add an ild coefficient to the correlation mean plus ressamble feature of the channels
-
-    """
-
-    assert x.shape == y.shape, "Predictions and targets must have same dimensions"
-
-    if not window_pred:
-        x, y = x.T, y.T # (n_stim, n_samples)
-
-    # Compute the correlation for all channels or batches
-    n_stim, n_samples = x.shape
-    corr = torch.zeros((n_stim, ))
-    for chan, (pred, target) in enumerate(zip(x, y)):
-        vx = pred - torch.mean(pred)
-        vy = target - torch.mean(target)
-        corr[chan] = torch.sum(vx * vy) / (torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)) + eps)
-
-    if mode == 'mean':
-        return torch.mean(-corr)
-    if mode == 'ressamble':
-        assert n_stim == 2, "When computing loss on ressamble mode 2 channels must be introduced"
-        assert alpha is not None, "When computing loss on ressamble mode alpha value must be introduced"
-        diff = torch.abs(corr[0] - corr[1])
-        return torch.mean(-corr) + alpha * diff
-    if mode == 'ild':
-        assert n_stim == 2, "When computing loss on ild mode 2 channels must be introduced"
-        assert alpha is not None, "When computing loss on ild mode alpha value must be introduced"
-        diff_ild = torch.abs(compute_ild(x[0], x[1]) - compute_ild(x[0], x[1]))
-        return torch.mean(-corr) + alpha * diff_ild
-    else: # for classifying the correlations
-        return(corr)
     
 # Returns the filename related to the subject solving the problem of S1
-def get_filename(mdl_folder_path, subject):
+def get_filename(mdl_folder_path, cv_fold=None):
+    
     list_dir = os.listdir(mdl_folder_path)
-    filename = ''
-    for file in list_dir:
-        if subject in file:
-            if subject == 'S1':
-                idx = file.index(subject)
-                if file[idx+2] == '_': # si el siguiente caracter al S1 es un barra baja añade al diccionario
-                    filename = file
-            else:
-                filename = file
-    return filename
+    
+    if cv_fold is None:
+        for file in list_dir:
+            if cv_prefix in file:
+                return file
+        raise ValueError(f'The file on the folder {mdl_folder_path} was not found')
+    
+    else:
+        cv_prefix = f'cvFold={cv_fold}'
+        for file in list_dir:
+            if cv_prefix in file:
+                return file
+        raise ValueError(f'The file on the folder {mdl_folder_path} with cv_fold {cv_fold} was not found')
 
 # Return used datapaths
 def get_data_path(global_data_path:str, dataset:str, preproc_mode=None):

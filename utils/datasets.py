@@ -68,7 +68,7 @@ class CustomDataset(Dataset):
     if acc is True then it also returns the unattended stimulus first sample
     """
 
-    def __init__(self, dataset, data_path, split, subjects, window, hop, 
+    def __init__(self, dataset, data_path, split, subjects, cv_fold, window, hop, 
                  norm_stim=False, data_type = 'mat', leave_one_out = False,
                  fixed=False, rnd_trials=False, window_pred=True, hrtf=False,
                  norm_hrtf_diff=False, eeg_band= None, spatial_locus=False):
@@ -101,6 +101,7 @@ class CustomDataset(Dataset):
         self.norm_hrtf_diff = norm_hrtf_diff
         self.eeg_band = eeg_band
         self.spatial_locus = spatial_locus
+        self.cv_fold = cv_fold
 
         if dataset == 'fulsang':
             self.eeg, self.stima, self.stimb = self.get_Fulsang_data()
@@ -124,7 +125,7 @@ class CustomDataset(Dataset):
         stim_chan = 2 if self.hrtf else 1
         
         if not self.leave_one_out:
-            trials = get_trials(self.split, n_trials, shuffle=self.rnd_trials, fixed=False, dataset= self.dataset)
+            trials = get_trials(self.split, n_trials, self.cv_fold, shuffle=self.rnd_trials, fixed=False, dataset= self.dataset)
         else:
             trials = get_leave_one_out_trials(self.split, n_trials, alternate=self.rnd_trials, fixed=False)
 

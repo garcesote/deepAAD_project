@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from utils.functional import load_model, get_mdl_name, multiple_loss_opt, get_data_path, get_channels, get_subjects, set_seeds, get_loss
+from utils.functional import verbose, load_model, get_mdl_name, multiple_loss_opt, get_data_path, get_subjects, set_seeds
 from utils.datasets import CustomDataset
 from utils.sampler import BatchRandomSampler
 from utils.loss_functions import CustomLoss
@@ -15,7 +15,9 @@ import os
 import json
 import wandb
 
-def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_stop):
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracking, early_stop):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
@@ -35,8 +37,6 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
 
         # Global params
         model = run['model']
-        
-        # exp_name = ('_').join([key, dataset, model])
 
         # Get configs
         train_config = run['train_params']
@@ -73,220 +73,234 @@ def main(config, wandb_upload, dataset, key, tunning, gradient_tracking, early_s
         else:
             selected_subj = get_subjects(dataset)
 
-        for subj in selected_subj:
-            
-            if key == 'population':
-                print(f'Training {model} on all subjects with {dataset} data...')
-            else:
-                run['subj'] = subj
-                if key == 'subj_independent':
-                    print(f'Training {model} leaving out {subj} with {dataset} data...')
-                else:
-                    print(f'Training {model} on {subj} with {dataset} data...')
-            
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-            # LOAD THE MODEL
-            mdl = load_model(run, dataset)
-            
-            mdl.to(device)
-            mdl_size = sum(p.numel() for p in mdl.parameters())
-            run['mdl_size'] = mdl_size
-            run['subject'] = subj
-            print(f'Model size: {mdl_size / 1e06:.2f}M')
-
-            # WEIGHT INITILAIZATION
-            init_weights = train_config.get('init_weights', False)
-            if init_weights: mdl.apply(mdl.init_weights)
-    
-            if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
-            if gradient_tracking and wandb_upload: wandb.watch(models=mdl, log='all')
-
-            # LOAD THE DATA
-            data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
-            train_set = CustomDataset(
-                dataset=dataset,
-                data_path=data_path,
-                split='train',
-                subjects=subj,
-                **ds_config
-            )
-            val_set = CustomDataset(
-                dataset=dataset,
-                data_path=data_path,
-                split='val',
-                subjects=subj,
-                **ds_val_config
-            )
-            
-            if batch_rnd_sampler:
-                batch_sampler = BatchRandomSampler(train_set, batch_size)
-                train_loader = DataLoader(train_set, batch_sampler=batch_sampler, pin_memory=True)
-            else:
-                train_loader = DataLoader(train_set, batch_size, shuffle = shuffle, pin_memory=True, drop_last=True)
-            
-            val_loader = DataLoader(val_set, batch_size, shuffle = val_shuffle, pin_memory=True, drop_last=True)
-            
-            # OPTIMIZER PARAMS
-            optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
-            scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience, verbose=True)
-
-            # LOSS FUNCTION
-            criterion = CustomLoss(window_pred=ds_config.get('window_pred', True), **run['loss_params'])
-
-            # Early stopping parameters
-            best_accuracy=0
-            best_epoch=0
-
-            # Saving metrics lists
-            train_mean_loss = []
-            val_mean_loss = []
-            val_decAccuracies = []
-
-            mdl_name = get_mdl_name(run)
-            prefix = model if key == 'population' else subj
+        # Cross validation 
+        if cross_val and key != 'subj_independent':
+            n_folds = 5
+        elif cross_val and key == 'subj_independent':
+            n_folds = 3
+        else:
+            n_folds = 1
         
-            mdl_folder = os.path.join(mdl_save_path, dataset+'_data', mdl_name)
+        for cv_fold in range(n_folds):
+            
+            if not cross_val: cv_fold = None
 
-            # Training loop
-            for epoch in range(max_epoch):
+            for subj in selected_subj:
                 
-                # Stop after n epoch without imporving the val loss
-                if epoch > best_epoch + early_stopping_patience:
-                    break
+                # VERBOSE
+                verbose('train', key, subj, dataset, model, loss_mode=loss_mode)
 
-                mdl.train()
-                train_loss = []
+                # LOAD THE MODEL
+                mdl = load_model(run, dataset, wandb_upload)
+                
+                mdl.to(device)
+                mdl_size = sum(p.numel() for p in mdl.parameters())
+                print(f'Model size: {mdl_size / 1e06:.2f}M')
 
-                # Initialize tqdm progress bar
-                train_loader_tqdm = tqdm(train_loader, desc=f'Epoch {epoch}/{max_epoch}', leave=False, mininterval=0.5)
+                # Add parameters to upload to wandb
+                run['mdl_size'] = mdl_size
+                run['subject'] = subj
+                if cross_val: run['cv_fold'] = cv_fold
 
-                for batch, data in enumerate(train_loader_tqdm):
+                # WEIGHT INITILAIZATION
+                init_weights = train_config.get('init_weights', False)
+                if init_weights: mdl.apply(mdl.init_weights)
+        
+                if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
+                if gradient_tracking and wandb_upload: wandb.watch(models=mdl, log='all')
+
+                # LOAD THE DATA
+                data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
+                train_set = CustomDataset(
+                    dataset=dataset,
+                    data_path=data_path,
+                    split='train',
+                    subjects=subj,
+                    cv_fold = cv_fold,
+                    **ds_config
+                )
+                val_set = CustomDataset(
+                    dataset=dataset,
+                    data_path=data_path,
+                    split='val',
+                    subjects=subj,
+                    cv_fold = cv_fold,
+                    **ds_val_config
+                )
+                
+                if batch_rnd_sampler:
+                    batch_sampler = BatchRandomSampler(train_set, batch_size)
+                    train_loader = DataLoader(train_set, batch_sampler=batch_sampler, pin_memory=True)
+                else:
+                    train_loader = DataLoader(train_set, batch_size, shuffle = shuffle, pin_memory=True, drop_last=True)
+                
+                val_loader = DataLoader(val_set, batch_size, shuffle = val_shuffle, pin_memory=True, drop_last=True)
+                
+                # OPTIMIZER PARAMS
+                optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
+                scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=scheduler_patience, verbose=True)
+
+                # LOSS FUNCTION
+                criterion = CustomLoss(window_pred=ds_config.get('window_pred', True), **run['loss_params'])
+
+                # Early stopping parameters
+                best_accuracy=0
+                best_epoch=0
+
+                # Saving metrics lists
+                train_mean_loss = []
+                val_mean_loss = []
+                val_decAccuracies = []
+
+                max_epoch = 2
+            
+                # Training loop
+                for epoch in range(max_epoch):
                     
-                    eeg = data['eeg'].to(device, dtype=torch.float)
-                    stima = data['stima'].to(device, dtype=torch.float)
+                    # Stop after n epoch without improving the val loss
+                    if epoch > best_epoch + early_stopping_patience:
+                        break
 
-                    # Forward the model and calculate the loss corresponding to the neg. Pearson coef
-                    with torch.autocast(device_type=device, dtype=torch.bfloat16):
-                        preds = mdl(eeg)
+                    mdl.train()
+                    train_loss = []
 
-                    targets = [stima, stimb] if 'penalty' in loss_mode else stima
+                    # Initialize tqdm progress bar
+                    train_loader_tqdm = tqdm(train_loader, desc=f'Epoch {epoch}/{max_epoch}', leave=False, mininterval=0.5)
 
-                    loss_list = criterion(preds=preds, targets = targets)
-                    loss = loss_list[0]
-
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
-                    
-                    # Append neg. loss corresponding to the coef. Pearson
-                    train_loss.append(loss_list)
-
-                    # Update the state of the train loss 
-                    train_loader_tqdm.set_postfix({'train_loss': loss.item()})
-
-                mdl.eval()
-                val_loss = []
-                val_att_loss = 0
-                val_att_ild = 0
-                val_att_corr = 0
-
-                # Validation
-                with torch.no_grad():
-
-                    for batch, data in enumerate(val_loader):
-
+                    for batch, data in enumerate(train_loader_tqdm):
+                        
                         eeg = data['eeg'].to(device, dtype=torch.float)
                         stima = data['stima'].to(device, dtype=torch.float)
 
-                        preds = mdl(eeg)
+                        # Forward the model and calculate the loss corresponding to the neg. Pearson coef
+                        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                            preds = mdl(eeg)
 
                         targets = [stima, stimb] if 'penalty' in loss_mode else stima
 
                         loss_list = criterion(preds=preds, targets = targets)
                         loss = loss_list[0]
+
+                        optimizer.zero_grad()
+                        loss.backward()
+                        optimizer.step()
                         
-                        if data.get('stimb'):
-                            if loss_mode != 'spatial_locus':
-                                stimb = data['stimb'].to(device, dtype=torch.float)
-                                # Decoding accuracy of the model
-                                unat_loss_list = criterion(preds=preds, targets = stimb)
-                                unat_loss = unat_loss_list[0]
-                                if loss.item() < unat_loss.item():
-                                    val_att_loss += 1
-                                # When multiple loss compute the accuracy for each metric
-                                if len(loss_list) > 1:
-                                    if loss_list[1].item() < unat_loss_list[1].item():
-                                        val_att_corr += 1
-                                    if loss_list[2].item() < unat_loss_list[2].item():
-                                        val_att_ild += 1
-                            else:
-                                probs = F.sigmoid(preds)
-                                pred_labels = (probs >= 0.5).float()
-                                n_correct = torch.sum(pred_labels == stima)
-                                if n_correct > batch_size // 2:
-                                    val_att_loss += 1
+                        # Append neg. loss corresponding to the coef. Pearson
+                        train_loss.append(loss_list)
 
-                        val_loss.append(loss_list)
+                        # Update the state of the train loss 
+                        train_loader_tqdm.set_postfix({'train_loss': loss.item()})
 
-                mean_val_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in val_loss])).item()
-                mean_train_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in train_loss])).item()
-                val_decAccuracy = val_att_loss / len(val_loader) * 100
-                val_corr_decAccuracy = val_att_corr / len(val_loader) * 100
-                val_ild_decAccuracy = val_att_ild / len(val_loader) * 100
+                    mdl.eval()
+                    val_loss = []
+                    val_att_loss = 0
+                    val_att_ild = 0
+                    val_att_corr = 0
 
-                scheduler.step(-mean_val_loss)
+                    # Validation
+                    with torch.no_grad():
 
-                # Logging metrics
-                if multiple_loss_opt(loss_mode):
-                    print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f} | Val ild_acc: {val_ild_decAccuracy} | Val corr_acc: {val_corr_decAccuracy}')
-                else:
-                    print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
-                
-                if wandb_upload:
-                    wandb_log = {'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
-                    # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
+                        for batch, data in enumerate(val_loader):
+
+                            eeg = data['eeg'].to(device, dtype=torch.float)
+                            stima = data['stima'].to(device, dtype=torch.float)
+
+                            preds = mdl(eeg)
+
+                            targets = [stima, stimb] if 'penalty' in loss_mode else stima
+
+                            loss_list = criterion(preds=preds, targets = targets)
+                            loss = loss_list[0]
+                            
+                            if data.get('stimb') is not None:
+                                if loss_mode != 'spatial_locus':
+                                    stimb = data['stimb'].to(device, dtype=torch.float)
+                                    # Decoding accuracy of the model
+                                    unat_loss_list = criterion(preds=preds, targets = stimb)
+                                    unat_loss = unat_loss_list[0]
+                                    if loss.item() < unat_loss.item():
+                                        val_att_loss += 1
+                                    # When multiple loss compute the accuracy for each metric
+                                    if len(loss_list) > 1:
+                                        if loss_list[1].item() < unat_loss_list[1].item():
+                                            val_att_corr += 1
+                                        if loss_list[2].item() < unat_loss_list[2].item():
+                                            val_att_ild += 1
+                                else:
+                                    probs = F.sigmoid(preds)
+                                    pred_labels = (probs >= 0.5).float()
+                                    n_correct = torch.sum(pred_labels == stima)
+                                    if n_correct > batch_size // 2:
+                                        val_att_loss += 1
+
+                            val_loss.append(loss_list)
+
+                    mean_val_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in val_loss])).item()
+                    mean_train_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in train_loss])).item()
+                    val_decAccuracy = val_att_loss / len(val_loader) * 100
+                    val_corr_decAccuracy = val_att_corr / len(val_loader) * 100
+                    val_ild_decAccuracy = val_att_ild / len(val_loader) * 100
+
+                    scheduler.step(-mean_val_loss)
+
+                    # Logging metrics
                     if multiple_loss_opt(loss_mode):
-                        wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
-                        wandb_log['train_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in train_loss])).item()
-                        wandb_log['val_acc_corr'] = val_corr_decAccuracy
-                        wandb_log['val_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in val_loss])).item()
-                        wandb_log['train_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in train_loss])).item()
-                        wandb_log['val_acc_ild'] = val_ild_decAccuracy
-                    wandb.log(wandb_log)
-            
-                train_mean_loss.append(mean_train_loss)
-                val_mean_loss.append(mean_val_loss)
-                val_decAccuracies.append(val_decAccuracy)
+                        print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f} | Val ild_acc: {val_ild_decAccuracy} | Val corr_acc: {val_corr_decAccuracy}')
+                    else:
+                        print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
+                    
+                    if wandb_upload:
+                        wandb_log = {'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
+                        # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
+                        if multiple_loss_opt(loss_mode):
+                            wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
+                            wandb_log['train_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in train_loss])).item()
+                            wandb_log['val_acc_corr'] = val_corr_decAccuracy
+                            wandb_log['val_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in val_loss])).item()
+                            wandb_log['train_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in train_loss])).item()
+                            wandb_log['val_acc_ild'] = val_ild_decAccuracy
+                        wandb.log(wandb_log)
+                
+                    train_mean_loss.append(mean_train_loss)
+                    val_mean_loss.append(mean_val_loss)
+                    val_decAccuracies.append(val_decAccuracy)
 
-                # Save best results
-                if mean_val_loss < best_accuracy or epoch == 0:
-                    # best_train_loss = mean_train_accuracy
-                    best_accuracy = mean_val_loss
-                    best_epoch = epoch
-                    best_state_dict = mdl.state_dict()
+                    # Save best results
+                    if mean_val_loss < best_accuracy or epoch == 0:
+                        # best_train_loss = mean_train_accuracy
+                        best_accuracy = mean_val_loss
+                        best_epoch = epoch
+                        best_state_dict = mdl.state_dict()
 
-            # Save best final model and metrics           
-            if not tunning:
+                # Save best final model and metrics           
+                if not tunning:
 
-                if not os.path.exists(mdl_folder):
-                    os.makedirs(mdl_folder)
-                torch.save(
-                    best_state_dict, 
-                    os.path.join(mdl_folder, f'{prefix}_epoch={epoch}_acc={best_accuracy:.4f}.ckpt')
-                )
+                    mdl_name = get_mdl_name(run)
+                    prefix = model if not cross_val else f'{model}_cvFold={cv_fold}'
+                    mdl_folder = os.path.join(mdl_save_path, dataset+'_data', mdl_name)
+                    if key != 'population': mdl_folder = os.path.join(mdl_folder, subj) # Add subj folder CNN[...]/S1/
 
-                val_folder = os.path.join(metrics_save_path, dataset+'_data', mdl_name, 'val')
-                if not os.path.exists(val_folder):
-                    os.makedirs(val_folder)
-                train_folder = os.path.join(metrics_save_path, dataset+'_data', mdl_name, 'train')
-                if not os.path.exists(train_folder):
-                    os.makedirs(train_folder)
-                json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-                json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-                json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+                    if not os.path.exists(mdl_folder):
+                        os.makedirs(mdl_folder)
+                    torch.save(
+                        best_state_dict, 
+                        os.path.join(mdl_folder, f'{prefix}_epoch={epoch}_acc={best_accuracy:.4f}.ckpt')
+                    )
 
-            if wandb_upload: wandb.finish()
+                    metrics_folder = os.path.join(metrics_save_path, dataset+'_data', mdl_name)
+                    if key != 'population': metrics_folder = os.path.join(metrics_folder, subj) # Add subj folder CNN[...]/S1/
+
+                    val_folder = os.path.join(metrics_folder, 'val')
+                    if not os.path.exists(val_folder):
+                        os.makedirs(val_folder)
+                    train_folder = os.path.join(metrics_folder, 'train')
+                    if not os.path.exists(train_folder):
+                        os.makedirs(train_folder)
+                    json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+                    json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+                    json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+
+                if wandb_upload: wandb.finish()
 
 if __name__ == "__main__":
 
@@ -295,13 +309,14 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/euroacustics/vlaai_pytorch.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/euroacustics/cnn.yaml", help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
+    parser.add_argument("--cross_val", action='store_true', help="When included perform a 5 cross validation for the train_set")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
-    parser.add_argument("--dataset", type=str, default='skl', help="Dataset")
-    parser.add_argument("--key", type=str, default='subject_specific', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
+    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
 
@@ -316,4 +331,4 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, args.key, args.tunning, args.gradient_tracking, not args.max_epoch)
+    main(config, wandb_upload, args.dataset, args.key, args.cross_val, args.tunning, args.gradient_tracking, not args.max_epoch)
