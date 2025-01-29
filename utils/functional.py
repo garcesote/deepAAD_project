@@ -109,7 +109,7 @@ def get_leave_one_out_trials(split: str, n_trials: int, alternate: bool = False,
     else:
         raise ValueError('Field split must be a train/val/test value')
 
-def verbose(mode, key, subj, dataset, model, window=None, loss_mode=None):
+def verbose(mode, key, subj, dataset, model, window=None, loss_mode=None, cv_fold=None):
 
     if mode == 'train':
         prefix = 'Training'
@@ -128,7 +128,7 @@ def verbose(mode, key, subj, dataset, model, window=None, loss_mode=None):
     else: raise ValueError('Key must be population/subj_specific/subj_independent')
 
     if loss_mode is not None:
-        print(f'Using criterion: {loss_mode}')
+        print(f'Using criterion: {loss_mode} | CV fold: {cv_fold}')
 
 # introduce subject index like 'S1' and return index like 'sub-001'
 def get_SKL_subj_idx(subject):

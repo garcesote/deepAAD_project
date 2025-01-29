@@ -88,7 +88,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
             for subj in selected_subj:
                 
                 # VERBOSE
-                verbose('train', key, subj, dataset, model, loss_mode=loss_mode)
+                verbose('train', key, subj, dataset, model, loss_mode=loss_mode, cv_fold=cv_fold)
 
                 # LOAD THE MODEL
                 mdl = load_model(run, dataset, wandb_upload)
@@ -100,7 +100,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
                 # Add parameters to upload to wandb
                 run['mdl_size'] = mdl_size
                 run['subject'] = subj
-                if cross_val: run['cv_fold'] = cv_fold
+                run['cv_fold'] = cv_fold
 
                 # WEIGHT INITILAIZATION
                 init_weights = train_config.get('init_weights', False)

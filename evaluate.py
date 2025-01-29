@@ -106,7 +106,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                     subj_name ='population' if eval_population else subj
                     str_win = str(eval_window//64)+'s'
 
-                    verbose('evaluate', key, subj, dataset, model, eval_window//64, loss_mode)
+                    verbose('evaluate', key, subj, dataset, model, eval_window//64, loss_mode, cv_fold=cv_fold)
 
                     # If the finetunning loss is different from the original (used for saving)
                     run['loss_params']['mode'] = run.get('finetune_loss', loss_mode)
@@ -125,7 +125,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
 
                     # GET THE MODEL LOAD PATH
                     mdl_load_path = os.path.join(global_path, 'results', project, key, mdl_load_folder, dataset+'_data', mdl_name)
-                    if key != 'population':
+                    if key != 'population' or finetuned:
                         mdl_load_path = os.path.join(mdl_load_path, subj)
 
                     mdl_filename = get_filename(mdl_load_path, cv_fold)

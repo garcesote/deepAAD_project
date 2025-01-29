@@ -6,7 +6,7 @@ import argparse
 import yaml
 import wandb
 
-from utils.functional import load_model, multiple_loss_opt, get_data_path, get_channels, get_subjects, set_seeds, get_loss
+from utils.functional import load_model, multiple_loss_opt, get_data_path, get_subjects, set_seeds
 from utils.datasets import CustomDataset
 from utils.sampler import BatchRandomSampler
 

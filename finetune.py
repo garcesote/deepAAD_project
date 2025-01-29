@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from utils.functional import verbose, load_model, get_mdl_name, multiple_loss_opt, set_seeds, get_data_path, get_channels, get_subjects, get_filename
+from utils.functional import verbose, load_model, get_mdl_name, multiple_loss_opt, set_seeds, get_data_path, get_subjects, get_filename
 from utils.datasets import CustomDataset
 from utils.loss_functions import CustomLoss
 from utils.sampler import BatchRandomSampler
@@ -21,7 +21,7 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'spatial_audio'
+    project = 'euroacustics'
     
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
@@ -89,7 +89,7 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
             for subj in selected_subj:
 
                 # VERBOSE
-                verbose('finetune', key, subj, dataset, model, loss_mode=loss_mode)
+                verbose('finetune', 'subj_specific', subj, dataset, model, loss_mode=loss_mode, cv_fold=cv_fold)
                 
                 # GET THE MODEL LOAD PATH
                 mdl_load_path = os.path.join(global_path, 'results', project, key, 'models', dataset+'_data', mdl_name)
@@ -99,7 +99,7 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                 mdl_load_path = os.path.join(mdl_load_path, mdl_filename)
 
                 # LOAD THE MODEL
-                mdl = load_model(run, dataset)
+                mdl = load_model(run, dataset, wandb_upload)
                 mdl.load_state_dict(torch.load(mdl_load_path, map_location=torch.device(device)))
                 mdl.to(device)
                 mdl.finetune()
@@ -107,6 +107,7 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                 mdl_size = sum(p.numel() for p in mdl.parameters())
                 run['mdl_size'] = mdl_size
                 run['subj'] = subj
+                run['cv_fold'] = cv_fold
 
                 if wandb_upload: wandb.init(project=project, name=exp_name, tags=['finetune'], config=run)
 
@@ -152,6 +153,8 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                 train_mean_loss = []
                 val_mean_loss = []
                 val_decAccuracies = []
+
+                max_epoch = 2
 
                 # FINETUNE THE MODEL
                 for epoch in range(max_epoch):
@@ -305,7 +308,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/finetunning/ild_penalty.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/euroacustics/cnn.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")

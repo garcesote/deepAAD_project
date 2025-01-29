@@ -221,16 +221,18 @@ class Linear_Perm(nn.Module):
         d = 0.2
     ):
         super().__init__()
-        self.linear = nn.Linear(input_feat, output_feat, bias)
+        # self.linear = nn.Linear(input_feat, output_feat, bias)
+        # Use of convolution insead of pemutations
+        self.linear = nn.Conv1d(input_feat, output_feat, kernel_size=1, bias=bias)
         self.name = name
         self.dropout = nn.Dropout(d)
 
     def forward(self,x):
 
-        x = x.permute(0, 2, 1).contiguous() # (B, C, T) => (B, T, C)
+        # x = x.permute(0, 2, 1).contiguous() # (B, C, T) => (B, T, C)
         x = self.linear(x)
         x = self.dropout(x)
-        x = x.permute(0, 2, 1).contiguous() # (B, T, C) => (B, C, T)
+        # x = x.permute(0, 2, 1).contiguous() # (B, T, C) => (B, C, T)
 
         return x
     
@@ -281,27 +283,20 @@ class VLAAI(nn.Module):
         self.use_skip = use_skip
         self.n_blocks = n_blocks
 
-        if stack_model is None:
-            stack_model = CNN_stack(input_channels=input_channels, d=dropout)
-        if output_context_model is None:
-            output_context_model = Out_Ctx_Layer(input_channels=input_channels, n_filters = input_channels, d=dropout)
-        
-        self.stack_model = stack_model
-        self.output_context_model = output_context_model
         self.window_pred = window_pred
-        self.linear = Linear_Perm(stack_model.filters[-1], input_channels, d=dropout)
-        self.out_linear = Linear_Perm(output_context_model.n_filters, output_dim, d=0)
 
         self.blocks = nn.ModuleList(
             [
                 nn.Sequential(
-                    self.stack_model,
-                    self.linear,
-                    self.output_context_model
+                    CNN_stack(input_channels=input_channels, d=dropout),
+                    Linear_Perm(128, input_channels, d=dropout),
+                    Out_Ctx_Layer(input_channels=input_channels, n_filters = input_channels, d=dropout)
                 )
                 for _ in range(n_blocks)
             ]
         )
+
+        self.out_linear = Linear_Perm(input_channels, output_dim, d=0)
 
     def forward(self, x, targets=None):
 
@@ -315,7 +310,7 @@ class VLAAI(nn.Module):
 
             # Skip connection
             if self.use_skip:
-                x += eeg 
+                x = x + eeg 
 
         preds = self.out_linear(x)
         preds = torch.squeeze(preds, dim=1)
