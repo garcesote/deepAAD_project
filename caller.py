@@ -1,30 +1,45 @@
 import subprocess
 
 # cmd = [
-#     "py", "spatial_classifier.py", 
-#     "--config", "configs/spatial_audio/diff_mse_criterion.yaml",
+#     "py", "train_models.py", 
+#     "--config", 'configs/euroacustics/cnn.yaml',
 #     "--key", 'population',
 #     "--dataset", 'fulsang',
+#     "--cross_val",
+#     "--wandb",
+# ]  
+# print(cmd)
+# subprocess.run(cmd)
+
+# cmd = [
+#     "py", "evaluate.py", 
+#     "--config", 'configs/euroacustics/cnn.yaml',
+#     "--key", 'population',
+#     "--dataset", 'fulsang',
+#     "--cross_val",
 #     "--wandb",
 # ]  
 # print(cmd)
 # subprocess.run(cmd)
 
 cmd = [
-    "py", "train_models.py", 
-    "--config", "configs/spatial_audio/batch_size.yaml",
+    "py", "finetune.py", 
+    "--config", 'configs/euroacustics/cnn.yaml',
     "--key", 'population',
     "--dataset", 'fulsang',
+    "--cross_val",
     "--wandb",
 ]  
 print(cmd)
 subprocess.run(cmd)
 
 cmd = [
-    "py", "spatial_classifier.py", 
-    "--config", "configs/spatial_audio/batch_size.yaml",
+    "py", "evaluate.py", 
+    "--config", 'configs/euroacustics/cnn.yaml',
     "--key", 'population',
     "--dataset", 'fulsang',
+    "--finetuned",
+    "--cross_val",
     "--wandb",
 ]  
 print(cmd)

@@ -316,3 +316,60 @@ class VLAAI(nn.Module):
         preds = torch.squeeze(preds, dim=1)
     
         return preds
+
+class VLAAI_old(nn.Module):
+    
+    def __init__(self,
+        n_blocks = 4,
+        stack_model=None,
+        output_context_model=None,
+        use_skip = True,
+        input_channels = 64,
+        output_dim = 1,
+        dropout = 0.2
+    ) -> None:
+        
+        super().__init__()
+
+        self.use_skip = use_skip
+        self.n_blocks = n_blocks
+
+        if stack_model is None:
+            stack_model = CNN_stack(input_channels=input_channels, d=dropout)
+        if output_context_model is None:
+            output_context_model = Out_Ctx_Layer(input_channels=input_channels, n_filters = input_channels, d=dropout)
+        
+        self.stack_model = stack_model
+        self.output_context_model = output_context_model
+        self.linear = Linear_Perm(stack_model.filters[-1], input_channels, d=dropout)
+        self.out_linear = Linear_Perm(output_context_model.n_filters, output_dim, d=0)
+
+        self.blocks = nn.ModuleList(
+            [
+                nn.Sequential(
+                    self.stack_model,
+                    self.linear,
+                    self.output_context_model
+                )
+                for _ in range(n_blocks)
+            ]
+        )
+
+    def forward(self, x, targets=None):
+
+        # Copy the input for the skip connection
+        if self.use_skip:
+            eeg = torch.clone(x)
+
+        for block in self.blocks:
+
+            x = block(x)
+
+            # Skip connection
+            if self.use_skip:
+                x += eeg 
+
+        preds = self.out_linear(x)
+        preds = torch.squeeze(preds, dim=1)
+    
+        return preds

@@ -91,7 +91,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
 
         for cv_fold in range(n_folds):
             
-            if cross_val: run['cv_fold'] = cv_fold
+            run['cv_fold'] = cv_fold
             if wandb_upload: wandb.init(project=project, name=exp_name, tags=[tag], config=run)
             if not cross_val: cv_fold = None
 

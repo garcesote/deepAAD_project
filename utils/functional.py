@@ -5,7 +5,7 @@ import argparse
 import wandb
 
 from models.dnn import FCNN, CNN
-from models.vlaai import VLAAI
+from models.vlaai import VLAAI, VLAAI_old
 from models.vlaai_pytorch import VLAAI as VLAAI_pytorch
 from models.eeg_conformer import Conformer, ConformerConfig
 
@@ -213,6 +213,10 @@ def load_model(config_run, dataset, wandb_upload):
     elif config_run['model'] == 'VLAAI':
         config_run['model_params']['input_channels'] = get_channels(dataset)
         mdl = VLAAI(**config_run['model_params'])
+
+    elif config_run['model'] == 'VLAAI_old':
+        config_run['model_params']['input_channels'] = get_channels(dataset)
+        mdl = VLAAI_old(**config_run['model_params'])
 
     elif config_run['model'] == 'VLAAI_pytorch':
         config_run['model_params']['input_channels'] = get_channels(dataset)

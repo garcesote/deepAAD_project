@@ -22,6 +22,9 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
     global_path = config['global_path']
     global_data_path = config['global_data_path']
     project = 'euroacustics'
+    config['dataset'] = dataset
+    exp_name = config['exp_name']
+    config['key'] = key
     
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
@@ -88,6 +91,11 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
 
             for subj in selected_subj:
 
+                # WANDB INIT
+                run['subj'] = subj
+                run['cv_fold'] = cv_fold
+                if wandb_upload: wandb.init(project=project, name=exp_name, tags=['finetune'], config=run)
+
                 # VERBOSE
                 verbose('finetune', 'subj_specific', subj, dataset, model, loss_mode=loss_mode, cv_fold=cv_fold)
                 
@@ -103,14 +111,7 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                 mdl.load_state_dict(torch.load(mdl_load_path, map_location=torch.device(device)))
                 mdl.to(device)
                 mdl.finetune()
-
-                mdl_size = sum(p.numel() for p in mdl.parameters())
-                run['mdl_size'] = mdl_size
-                run['subj'] = subj
-                run['cv_fold'] = cv_fold
-
-                if wandb_upload: wandb.init(project=project, name=exp_name, tags=['finetune'], config=run)
-
+                
                 # LOAD THE DATA
                 data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
                 train_set = CustomDataset(
@@ -153,8 +154,6 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                 train_mean_loss = []
                 val_mean_loss = []
                 val_decAccuracies = []
-
-                max_epoch = 2
 
                 # FINETUNE THE MODEL
                 for epoch in range(max_epoch):

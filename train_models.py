@@ -54,6 +54,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
         preproc_mode = train_config.get('preproc_mode')
         shuffle = train_config.get('shuffle', False)
         val_shuffle = shuffle if ds_config.get('window_pred') else False
+        val_batch_size = 1 if ds_config.get('window_pred') else batch_size
 
         # Config dataset
         ds_config['leave_one_out'] = True if key == 'subj_independent' else False
@@ -86,27 +87,25 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
             if not cross_val: cv_fold = None
 
             for subj in selected_subj:
+
+                # WANDB INIT
+                run['subject'] = subj
+                run['cv_fold'] = cv_fold
+                if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
                 
                 # VERBOSE
                 verbose('train', key, subj, dataset, model, loss_mode=loss_mode, cv_fold=cv_fold)
 
                 # LOAD THE MODEL
                 mdl = load_model(run, dataset, wandb_upload)
-                
                 mdl.to(device)
                 mdl_size = sum(p.numel() for p in mdl.parameters())
                 print(f'Model size: {mdl_size / 1e06:.2f}M')
-
-                # Add parameters to upload to wandb
-                run['mdl_size'] = mdl_size
-                run['subject'] = subj
-                run['cv_fold'] = cv_fold
 
                 # WEIGHT INITILAIZATION
                 init_weights = train_config.get('init_weights', False)
                 if init_weights: mdl.apply(mdl.init_weights)
         
-                if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
                 if gradient_tracking and wandb_upload: wandb.watch(models=mdl, log='all')
 
                 # LOAD THE DATA
@@ -134,7 +133,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
                 else:
                     train_loader = DataLoader(train_set, batch_size, shuffle = shuffle, pin_memory=True, drop_last=True)
                 
-                val_loader = DataLoader(val_set, batch_size, shuffle = val_shuffle, pin_memory=True, drop_last=True)
+                val_loader = DataLoader(val_set, val_batch_size, shuffle = val_shuffle, pin_memory=True, drop_last=True)
                 
                 # OPTIMIZER PARAMS
                 optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
@@ -151,8 +150,6 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
                 train_mean_loss = []
                 val_mean_loss = []
                 val_decAccuracies = []
-
-                max_epoch = 2
             
                 # Training loop
                 for epoch in range(max_epoch):
