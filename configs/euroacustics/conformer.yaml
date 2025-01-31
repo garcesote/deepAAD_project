@@ -1,0 +1,42 @@
+# global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+# global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
+# global_data_path: 'D:\igarcia\AAD_Data'
+global_path: 'C:/Users/garce/Desktop/proyecto_2024/deepAAD_project'
+global_data_path: 'C:/Users/garce/Desktop/proyecto_2024/Data'
+
+exp_name: 'Conformer_trial'
+
+runs: # All models trained with window size of 5s
+
+  - model: 'Conformer'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      shuffle: True
+    dataset_params:
+      window: 50  
+      hop: 1                 
+      fixed: False      
+      rnd_trials: False   
+      window_pred: False
+    loss_params:
+      mode: 'mean'
+    model_params:
+      mlp_ratio: 2
+      enc_layers: 2
+      n_head: 4
+      n_embd: 32
+      kernel_temp: 8
+      pool: 10
+      pool_hop: 2
+      block_size: 50 # 2s
+      hidden_size: 32
+      dropout: 0.4
+      dropout_clsf: 0.6
+      classifier: True
+      bias: True

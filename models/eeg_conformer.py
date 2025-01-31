@@ -179,13 +179,10 @@ class ClassificationHead(nn.Sequential):
 
         if config.classifier:
             self.fc = nn.Sequential(
-                nn.Linear(self.input_size, 256),
+                nn.Linear(self.input_size, config.hidden_size),
                 nn.ELU(),
                 nn.Dropout(config.dropout),
-                nn.Linear(256, 32),
-                nn.ELU(),
-                nn.Dropout(config.dropout),
-                nn.Linear(32, self.output_dim)
+                nn.Linear(config.hidden_size, self.output_dim)
             )
         else:
             self.fc = nn.Linear(self.input_size, 1)
@@ -205,17 +202,18 @@ class ConformerConfig:
     mlp_ratio: int = 2
     enc_layers: int = 2
     n_head: int = 4
-    n_embd: int = 40
+    n_embd: int = 64
     kernel_chan: int = 64
     kernel_temp: int = 8
-    pool: int = 20
-    pool_hop: int = 4
+    pool: int = 10
+    pool_hop: int = 2
     eeg_channels: int = 64
-    block_size: int = 128 # 2s
+    block_size: int = 50 # 2s
     dropout: float = 0.4
-    classifier: bool = True
+    dropout_clsf: float = 0.6
     output_dim: int = 1
-
+    hidden_size: int = 32 
+    classifier: bool = True
     bias: bool = True # True: bias in Linears and LayerNorms. False: a bit better and faster 
 
 class Conformer(nn.Sequential):
