@@ -7,6 +7,7 @@ from utils.functional import get_other_subjects, get_trials, get_leave_one_out_t
 import gc
 from sklearn.preprocessing import MinMaxScaler
 import pandas as pd
+import random
 
 class CustomDataset(Dataset):
 
@@ -71,7 +72,7 @@ class CustomDataset(Dataset):
     def __init__(self, dataset, data_path, split, subjects, cv_fold, window, hop, 
                  norm_stim=False, data_type = 'mat', leave_one_out = False,
                  fixed=False, rnd_trials=False, window_pred=True, hrtf=False,
-                 norm_hrtf_diff=False, eeg_band= None, spatial_locus=False):
+                 norm_hrtf_diff=False, eeg_band= None, spatial_locus=False, seed=42):
 
         if not isinstance(subjects, list):
             subjects = [subjects]
@@ -79,12 +80,23 @@ class CustomDataset(Dataset):
         if not leave_one_out:
             self.subjects = subjects
         else:
-            # When training on population mode all subjects except the specified ore used for training
-            if split=='train':
-                self.subjects = get_other_subjects(subjects, dataset)
-            # For val and test the specified subject is intraoduced
-            else:
+            if split == 'test':
                 self.subjects = subjects
+            else:
+                train_val_subjects = get_other_subjects(subjects, dataset)
+                # Pick randomly 4 subjects from the list for each of the 5 CV fold when val or training
+                random.seed(42)
+                val_cv_subjects = [random.sample(train_val_subjects, 4) for _ in range(5)]
+                if cv_fold is not None:
+                    val_subjects = val_cv_subjects[cv_fold]
+                else:
+                    val_subjects = val_cv_subjects[0]
+                if split=='train':
+                    self.subjects = [subj for subj in train_val_subjects if subj not in val_subjects]
+                elif split=='val':
+                    self.subjects = val_subjects
+                else:
+                    raise ValueError('Introduce a valid set')
 
         self.data_path = data_path
         self.dataset = dataset
@@ -127,7 +139,8 @@ class CustomDataset(Dataset):
         if not self.leave_one_out:
             trials = get_trials(self.split, n_trials, self.cv_fold, shuffle=self.rnd_trials, fixed=False, dataset= self.dataset)
         else:
-            trials = get_leave_one_out_trials(self.split, n_trials, alternate=self.rnd_trials, fixed=False)
+            trials = get_trials('all', n_trials, None, shuffle=self.rnd_trials, fixed=False, dataset= self.dataset)
+            # trials = get_leave_one_out_trials(self.split, n_trials, alternate=self.rnd_trials, fixed=False)
 
         self.trials = trials
         self.n_trials = len(trials)

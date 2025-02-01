@@ -1,4 +1,5 @@
 results
 wandb
 figures
+logs
 .vscode/settings.json

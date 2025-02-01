@@ -3,6 +3,7 @@ import numpy as np
 import os
 import argparse
 import wandb
+import random
 
 from models.dnn import FCNN, CNN
 from models.vlaai import VLAAI, VLAAI_old
@@ -316,6 +317,7 @@ def set_seeds(seed: int=42):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     np.random.seed(seed)
+    random.seed(seed)
 
 def multiple_loss_opt(loss_mode:str):
     return loss_mode in ['ressamble', 'corr_ild_mae', 'corr_ild_mse', 'corr_ild_mse_penalty', 'corr_ild_mse_penalty_w', 'corr_diff_mse', 'corr_diff_mae']

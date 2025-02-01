@@ -58,5 +58,5 @@ class VLAAI(nn.Module):
         x = x.transpose(1, 2)
         x = self.final_dense(x)
         x = x.transpose(1, 2)
-        x = torch.squeeze(x)
+        x = torch.squeeze(x, dim=1)
         return x

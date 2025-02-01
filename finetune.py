@@ -92,7 +92,7 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
             for subj in selected_subj:
 
                 # WANDB INIT
-                run['subj'] = subj
+                run['subject'] = subj
                 run['cv_fold'] = cv_fold
                 if wandb_upload: wandb.init(project=project, name=exp_name, tags=['finetune'], config=run)
 

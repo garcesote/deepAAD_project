@@ -9,6 +9,7 @@ from utils.sampler import BatchRandomSampler
 from utils.loss_functions import CustomLoss
 
 from tqdm import tqdm
+import random
 import argparse
 import yaml
 import os
@@ -70,15 +71,14 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
 
         # Population mode that generates a model for all samples
         if key == 'population':
-            selected_subj = [get_subjects(dataset)]
+            selected_subj = [get_subjects(dataset)][:5]
+            max_epoch = 2
         else:
             selected_subj = get_subjects(dataset)
 
         # Cross validation 
-        if cross_val and key != 'subj_independent':
+        if cross_val:
             n_folds = 5
-        elif cross_val and key == 'subj_independent':
-            n_folds = 3
         else:
             n_folds = 1
         
@@ -306,14 +306,15 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/euroacustics/conformer.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/euroacustics/cnn.yaml", help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--cross_val", action='store_true', help="When included perform a 5 cross validation for the train_set")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
+    parser.add_argument("--sync", action='store_true', help="When included register gradien on wandb")    
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='subj_independent', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
 
@@ -322,6 +323,8 @@ if __name__ == "__main__":
     # Upload results to wandb
     if wandb_upload:
         wandb.login()
+
+    if args.sync: torch.cuda.synchronize()
 
     # Load corresponding config
     with open(args.config, 'r') as archivo:
