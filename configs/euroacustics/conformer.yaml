@@ -1,11 +1,11 @@
-global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
-global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+# global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
 # global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
 # global_data_path: 'D:\igarcia\AAD_Data'
-# global_path: 'C:/Users/garce/Desktop/proyecto_2024/deepAAD_project'
-# global_data_path: 'C:/Users/garce/Desktop/proyecto_2024/Data'
+global_path: 'C:/Users/garce/Desktop/proyecto_2024/deepAAD_project'
+global_data_path: 'C:/Users/garce/Desktop/proyecto_2024/Data'
 
-exp_name: 'Conformer_trial'
+exp_name: 'Conformer_sweep'
 
 runs: # All models trained with window size of 5s
 
@@ -20,7 +20,7 @@ runs: # All models trained with window size of 5s
       shuffle: True
     dataset_params:
       window: 50  
-      hop: 1                 
+      hop: 4                 
       fixed: False      
       rnd_trials: False   
       window_pred: False

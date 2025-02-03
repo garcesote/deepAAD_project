@@ -54,10 +54,11 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
         preproc_mode = train_config.get('preproc_mode')
         shuffle = train_config.get('shuffle', False)
         val_shuffle = shuffle if ds_config.get('window_pred') else False
-
+        val_batch_size = 1 if ds_config.get('window_pred') else batch_size
+        
         # Config dataset
         ds_config['leave_one_out'] = True if key == 'subj_independent' else False
-        ds_val_config = ds_config
+        ds_val_config = ds_config.copy()
         if ds_config['window_pred'] == False: ds_val_config['hop'] = 1 
 
         # Config loss
@@ -137,7 +138,7 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                 else:
                     train_loader = DataLoader(train_set, batch_size, shuffle = shuffle, pin_memory=True, drop_last=True)
                 
-                val_loader = DataLoader(val_set, batch_size, shuffle = val_shuffle, pin_memory=True, drop_last=True)
+                val_loader = DataLoader(val_set, val_batch_size, shuffle = val_shuffle, pin_memory=True, drop_last=True)
                 
                 # OPTIMIZER PARAMS: optimize only parameters which contains grad
                 optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, mdl.parameters()), lr= lr * lr_decay, weight_decay=weight_decay)

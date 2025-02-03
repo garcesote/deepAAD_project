@@ -6,7 +6,7 @@ import argparse
 import yaml
 import wandb
 
-from utils.functional import load_model, multiple_loss_opt, get_data_path, get_subjects, set_seeds
+from utils.functional import verbose, load_model, multiple_loss_opt, get_data_path, get_subjects, set_seeds
 from utils.datasets import CustomDataset
 from utils.sampler import BatchRandomSampler
 
@@ -14,41 +14,40 @@ import torch
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-def process_training_run(run, config, dataset, global_data_path, project, key, early_stop):
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+
+def process_training_run(run, config, dataset, global_data_path, project, key, cv_fold, early_stop):
 
     # Global params
     model = run['model']
-    exp_name = config['exp_name']
 
-    wandb.init(config=config)
+    # Get configs
+    train_config = run['train_params']
+    ds_config = run['dataset_params']
+    loss_config = run['loss_params']
 
     # Config training
-    train_params = run['train_params']
-    lr = float(getattr(wandb.config, 'lr', train_params.get('lr')))
-    batch_size = getattr(wandb.config, 'batch_size', train_params.get('batch_size'))
-    max_epoch = train_params['max_epoch']
-    weight_decay = float(train_params['weight_decay'])
-    scheduler_patience = train_params.get('scheduler_patience', 10)
-    early_stopping_patience = train_params['early_stopping_patience'] if early_stop else max_epoch
-    preproc_mode = train_params.get('preproc_mode')
-    batch_rnd_sampler = train_params.get('batch_rnd_sampler', False)
-    shuffle = train_params.get('shuffle', False)
+    batch_size = train_config['batch_size']
+    lr = float(train_config['lr'])
+    max_epoch = train_config.get('max_epoch', 200)
+    weight_decay = float(train_config.get('weight_decay', 1e-8))
+    scheduler_patience = train_config.get('scheduler_patience', 10)
+    early_stopping_patience = train_config['early_stopping_patience'] if early_stop else max_epoch
+    batch_rnd_sampler = train_config.get('batch_rnd_sampler', False)
+    preproc_mode = train_config.get('preproc_mode')
+    shuffle = train_config.get('shuffle', False)
+    val_shuffle = shuffle if ds_config.get('window_pred') else False
+    val_batch_size = 1 if ds_config.get('window_pred') else batch_size
 
     # Config dataset
-    ds_config = run['dataset_params']
-    run['dataset_params']['window'] = getattr(wandb.config, 'window', ds_config['window'])
     ds_config['leave_one_out'] = True if key == 'subj_independent' else False
-    ds_val_config = ds_config
+    ds_val_config = ds_config.copy()
     if ds_config['window_pred'] == False: ds_val_config['hop'] = 1 
-    val_shuffle = shuffle if ds_config.get('window_pred') else False
 
     # Config loss
-    loss_params = run['loss_params']
-    loss_params['alpha_end'] = getattr(wandb.config, 'alpha_end', loss_params.get('alpha_end'))
-    loss_params['mode'] = getattr(wandb.config, 'mode', loss_params.get('mode', 'mean'))
+    loss_mode = loss_config.get('mode', 'mean')
     
-    data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
-
     # Population mode that generates a model for all samples
     if key == 'population':
         selected_subj = [get_subjects(dataset)]
@@ -57,36 +56,35 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
 
     for subj in selected_subj:
 
-        if key == 'population':
-            print(f'Training {model} on all subjects with {dataset} data...')
-        else:
-            run['subj'] = subj
-            if key == 'subj_independent':
-                print(f'Training {model} leaving out {subj} with {dataset} data...')
-            else:
-                print(f'Training {model} on {subj} with {dataset} data...')
-
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
+        # WANDB INIT
+        run['subject'] = subj
+        run['cv_fold'] = cv_fold
+        run['key'] = key
+        wandb.init(project=project, tags=['sweep'], config=run)
+        
+        # VERBOSE
+        verbose('train', key, subj, dataset, model, loss_mode=loss_mode, cv_fold=cv_fold)
+        
         # LOAD THE MODEL
-        mdl = load_model(run, dataset)
+        mdl = load_model(run, dataset, True)
 
         mdl.to(device)
         mdl_size = sum(p.numel() for p in mdl.parameters())
         run['mdl_size'] = mdl_size
         run['subject'] = subj
-        print(f'Model size: {mdl_size / 1e06:.2f}M')
 
-        # WEIGHT INITIALIZATION
-        if exp_name == 'bool_params':
-            if train_params['init_weights']: mdl.apply(mdl.init_weights)
+        # WEIGHT INITILAIZATION
+        init_weights = train_config.get('init_weights', False)
+        if init_weights: mdl.apply(mdl.init_weights)
 
         # LOAD THE DATA
+        data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
         train_set = CustomDataset(
             dataset=dataset,
             data_path=data_path,
             split='train',
             subjects=subj,
+            cv_fold = None,
             **ds_config
         )
         val_set = CustomDataset(
@@ -94,6 +92,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
             data_path=data_path,
             split='val',
             subjects=subj,
+            cv_fold = None,
             **ds_val_config
         )
 
@@ -102,7 +101,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
             train_loader = DataLoader(train_set, batch_sampler=batch_sampler, pin_memory=True)
         else:
             train_loader = DataLoader(train_set, batch_size, shuffle = shuffle, pin_memory=True, drop_last=True)
-            val_loader = DataLoader(val_set, batch_size, shuffle= val_shuffle, pin_memory=True)
+        val_loader = DataLoader(val_set, val_batch_size, shuffle= val_shuffle, pin_memory=True)
 
         # OPTIMIZER PARAMS
         optimizer = torch.optim.Adam(mdl.parameters(), lr=lr, weight_decay=weight_decay)
@@ -186,8 +185,9 @@ def process_training_run(run, config, dataset, global_data_path, project, key, e
             print(f'Epoch: {epoch} | Train loss: {-mean_train_loss:.4f} | Val loss/acc: {-mean_val_loss:.4f}/{val_decAccuracy:.4f}')
 
             wandb_log = {'epoch': epoch,'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
+            
             # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
-            if multiple_loss_opt(loss_params['mode']):
+            if multiple_loss_opt(loss_config['mode']):
                 wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
                 wandb_log['train_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in train_loss])).item()
                 wandb_log['val_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in val_loss])).item()
@@ -207,6 +207,7 @@ def main(config, dataset, key):
     project = 'spatial_audio'
     config['dataset'] = dataset
     config['key'] = key
+    cross_val = None
 
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
@@ -216,11 +217,11 @@ def main(config, dataset, key):
         set_seeds() # default seed = 42
 
     for run in config['runs']:
-        process_training_run(run, config, dataset, global_data_path, project, key, early_stop=True)
+        process_training_run(run, config, dataset, global_data_path, project, key, cross_val, early_stop=True)
 
 if __name__ == "__main__":
 
-    config_path = 'configs/sweep_runs/ild_sweep_local.yaml'
+    config_path = 'configs/euroacustics/conformer.yaml'
     dataset = 'fulsang'
     key = 'population'
 

@@ -199,17 +199,20 @@ def load_model(config_run, dataset, wandb_upload):
         mdl = FCNN(**config_run['model_params'])
 
     elif config_run['model'] == 'CNN':
+        
+        mdl_config = config_run['model_params'].copy()
+
         if wandb_upload:
             # Sweep params implemented
-            mdl_config = config_run['model_params']
             mdl_config['dropout'] = getattr(wandb.config, 'dropout', mdl_config.get('dropout'))
             mdl_config['input_samples'] = getattr(wandb.config, 'input_samples', mdl_config.get('input_samples'))
             mdl_config['F1'] = getattr(wandb.config, 'F1', mdl_config.get('F1'))
             mdl_config['D'] = getattr(wandb.config, 'D', mdl_config.get('D'))
             mdl_config['AP1'] = getattr(wandb.config, 'AP1', mdl_config.get('AP1'))
             mdl_config['AP2'] = getattr(wandb.config, 'AP2', mdl_config.get('AP2'))
-            config_run['model_params']['input_channels'] = get_channels(dataset)
-        mdl = CNN(**config_run['model_params'])
+        
+        mdl_config['input_channels'] = get_channels(dataset)
+        mdl = CNN(**mdl_config)
 
     elif config_run['model'] == 'VLAAI':
         config_run['model_params']['input_channels'] = get_channels(dataset)
@@ -224,9 +227,22 @@ def load_model(config_run, dataset, wandb_upload):
         mdl = VLAAI_pytorch(**config_run['model_params'])
 
     elif config_run['model'] == 'Conformer':
-        config_run['model_params']['eeg_channels'] = get_channels(dataset)
-        config_run['model_params']['kernel_chan'] = get_channels(dataset)
-        mdl_config = ConformerConfig(**config_run['model_params'])
+        
+        mdl_config = config_run['model_params'].copy()
+        mdl_config['eeg_channels'] = get_channels(dataset)
+        mdl_config['kernel_chan'] = get_channels(dataset)
+        
+        if wandb_upload:
+            # Sweep params implemented
+            mdl_config['dropout'] = getattr(wandb.config, 'dropout', mdl_config.get('dropout'))
+            mdl_config['dropout_clsf'] = getattr(wandb.config, 'dropout_clsf', mdl_config.get('dropout_clsf'))
+            mdl_config['enc_layers'] = getattr(wandb.config, 'enc_layers', mdl_config.get('enc_layers'))
+            mdl_config['n_embd'] = getattr(wandb.config, 'n_embd', mdl_config.get('n_embd'))
+            mdl_config['pool'] = getattr(wandb.config, 'pool', mdl_config.get('pool'))
+            mdl_config['pool_hop'] = getattr(wandb.config, 'pool_hop', mdl_config.get('pool_hop'))
+            mdl_config['hidden_size'] = getattr(wandb.config, 'hidden_size', mdl_config.get('hidden_size'))
+
+        mdl_config = ConformerConfig(**mdl_config)
         mdl = Conformer(mdl_config)
 
     else:

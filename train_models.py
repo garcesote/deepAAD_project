@@ -59,7 +59,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
 
         # Config dataset
         ds_config['leave_one_out'] = True if key == 'subj_independent' else False
-        ds_val_config = ds_config
+        ds_val_config = ds_config.copy()
         if ds_config['window_pred'] == False: ds_val_config['hop'] = 1 
 
         # Config loss
@@ -91,6 +91,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
                 # WANDB INIT
                 run['subject'] = subj
                 run['cv_fold'] = cv_fold
+                run['key'] = key
                 if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
                 
                 # VERBOSE

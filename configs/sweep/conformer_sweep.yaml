@@ -1,34 +1,26 @@
 program: sweep_models.py
 project: euroacustics
-method: grid  # random, grid, bayes
+method: bayes  # random, grid, bayes
 metric:
   name: val_loss  # Monitored metric
   goal: minimize  # Maximize or minimize the metric
 parameters:
-  lr:
-    distribution: uniform
-    min: 1e-6
-    max: 1e-4
-  batch_size:
-    values: [64, 128, 320]
-  window:
-    values: [50, 128]
-  alpha_loss:
-    distribution: uniform
-    min: 0.005
-    max: 0.04
   dropout:
-    distribution: uniform
-    min: 0.1
-    max: 0.4
-  F1: 
-    values: [8, 32]
-  F2: 
-    values: [64, 128]
-  AP1:
+    values: [0.2, 0.4]
+  dropout_clsf:
+    values: [0.4, 0.6]
+  enc_layers: 
     values: [2, 4]
+  n_embd:
+    values: [32, 64]
+  pool:
+    values: [5, 20]
+  pool_hop:
+    values: [2, 5]
+  hidden_size:
+    values: [8, 32, 128]    
 command:
   - ${env}
-  - C:/Users/jaulab/SSS_Enviroment/Scripts/python.exe
+  - C:/Users/garce/AAD_Enviroment/Scripts/python.exe
   - ${program}
   - ${args}
