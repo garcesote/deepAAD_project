@@ -1,104 +1,130 @@
-# global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
-# global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
 # global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
 # global_data_path: 'D:\igarcia\AAD_Data'
-global_path: 'C:/Users/garce/Desktop/proyecto_2024/deepAAD_project'
-global_data_path: 'C:/Users/garce/Desktop/proyecto_2024/Data'
+# global_path: 'C:/Users/garce/Desktop/proyecto_2024/deepAAD_project'
+# global_data_path: 'C:/Users/garce/Desktop/proyecto_2024/Data'
 
 exp_name: 'VLAAI_comparison'
 
 runs:
 
-  - model: 'VLAAI_pytorch'
-    train_params:
-      batch_size: 64              
-      max_epoch: 200              
-      lr: 1e-06
-      weight_decay: 1e-04                   
-      early_stopping_patience: 5
-      scheduler_patience: 2
-      shuffle: True
-    dataset_params:
-      window: 320  
-      hop: 32                
-      fixed: False      
-      rnd_trials: False   
-      window_pred: True
-    model_params:
-      n_blocks: 4
-      use_skip: True
-      output_dim: 1
-    loss_params:
-      mode: 'mean'
+  # - model: 'VLAAI_pytorch'
+  #   train_params:
+  #     batch_size: 64              
+  #     max_epoch: 200              
+  #     lr: 1e-06
+  #     weight_decay: 1e-04                   
+  #     early_stopping_patience: 5
+  #     scheduler_patience: 2
+  #     shuffle: True
+  #   dataset_params:
+  #     window: 320  
+  #     hop: 32                
+  #     fixed: False      
+  #     rnd_trials: False   
+  #     window_pred: True
+  #   model_params:
+  #     n_blocks: 4
+  #     use_skip: True
+  #     output_dim: 1
+  #   loss_params:
+  #     mode: 'mean'
 
-  - model: 'VLAAI'
-    train_params:
-      batch_size: 64              
-      max_epoch: 200              
-      lr: 3e-05
-      weight_decay: 1e-04                   
-      early_stopping_patience: 5
-      scheduler_patience: 2
-      shuffle: True
-    dataset_params:
-      window: 320  
-      hop: 32                
-      fixed: False      
-      rnd_trials: False   
-      window_pred: True
-    model_params:
-      n_blocks: 4
-      use_skip: True
-      output_dim: 1
-      dropout: 0.4
-    loss_params:
-      mode: 'mean'
+  # - model: 'VLAAI'
+  #   train_params:
+  #     batch_size: 64              
+  #     max_epoch: 200              
+  #     lr: 3e-05
+  #     weight_decay: 1e-04                   
+  #     early_stopping_patience: 5
+  #     scheduler_patience: 2
+  #     shuffle: True
+  #   dataset_params:
+  #     window: 320  
+  #     hop: 32                
+  #     fixed: False      
+  #     rnd_trials: False   
+  #     window_pred: True
+  #   model_params:
+  #     n_blocks: 4
+  #     use_skip: True
+  #     output_dim: 1
+  #     dropout: 0.4
+  #   loss_params:
+  #     mode: 'mean'
 
-  - model: 'VLAAI_old'
-    train_params:
-      batch_size: 64              
-      max_epoch: 200              
-      lr: 3e-05
-      weight_decay: 1e-04                   
-      early_stopping_patience: 5
-      scheduler_patience: 2
-      shuffle: True
-    dataset_params:
-      window: 320  
-      hop: 32                
-      fixed: False      
-      rnd_trials: False   
-      window_pred: True
-    model_params:
-      n_blocks: 4
-      use_skip: True
-      output_dim: 1
-      dropout: 0.4
-    loss_params:
-      mode: 'mean'
+  # - model: 'VLAAI_old'
+  #   train_params:
+  #     batch_size: 64              
+  #     max_epoch: 200              
+  #     lr: 3e-05
+  #     weight_decay: 1e-04                   
+  #     early_stopping_patience: 5
+  #     scheduler_patience: 2
+  #     shuffle: True
+  #   dataset_params:
+  #     window: 320  
+  #     hop: 32                
+  #     fixed: False      
+  #     rnd_trials: False   
+  #     window_pred: True
+  #   model_params:
+  #     n_blocks: 4
+  #     use_skip: True
+  #     output_dim: 1
+  #     dropout: 0.4
+  #   loss_params:
+  #     mode: 'mean'
 
-  - model: 'VLAAI'
+  # - model: 'VLAAI'
+  #   train_params:
+  #     batch_size: 64              
+  #     max_epoch: 200              
+  #     lr: 1e-06
+  #     weight_decay: 1e-04                   
+  #     early_stopping_patience: 5
+  #     scheduler_patience: 2
+  #     shuffle: True
+  #   dataset_params:
+  #     window: 320  
+  #     hop: 32                
+  #     fixed: False      
+  #     rnd_trials: False   
+  #     window_pred: True
+  #   model_params:
+  #     n_blocks: 4
+  #     use_skip: True
+  #     output_dim: 1
+  #     dropout: 0
+  #   loss_params:
+  #     mode: 'mean'
+
+  - model: 'CNN'
     train_params:
       batch_size: 64              
       max_epoch: 200              
-      lr: 1e-06
-      weight_decay: 1e-04                   
+      lr: 2e-05
+      weight_decay: 1e-08                      
       early_stopping_patience: 5
-      scheduler_patience: 2
+      scheduler_patience: 3
       shuffle: True
     dataset_params:
       window: 320  
-      hop: 32                
+      hop: 32                 
       fixed: False      
       rnd_trials: False   
       window_pred: True
-    model_params:
-      n_blocks: 4
-      use_skip: True
-      output_dim: 1
-      dropout: 0
     loss_params:
       mode: 'mean'
+    model_params:
+      F1: 8
+      D: 8
+      AP1: 2
+      AP2: 4
+      dropout: 0.2
+      input_samples: 320
+      output_dim: 320
 
   - model: 'CNN'
     train_params:

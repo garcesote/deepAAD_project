@@ -23,9 +23,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
     global_path = config['global_path']
     global_data_path = config['global_data_path']
     project = 'euroacustics'
-    config['dataset'] = dataset
     exp_name = config['exp_name']
-    config['key'] = key
 
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
@@ -71,8 +69,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
 
         # Population mode that generates a model for all samples
         if key == 'population':
-            selected_subj = [get_subjects(dataset)][:5]
-            max_epoch = 2
+            selected_subj = [get_subjects(dataset)]
         else:
             selected_subj = get_subjects(dataset)
 
@@ -90,8 +87,9 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
 
                 # WANDB INIT
                 run['subject'] = subj
-                run['cv_fold'] = cv_fold
+                if cross_val: run['cv_fold'] = cv_fold
                 run['key'] = key
+                run['dataset'] = dataset
                 if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
                 
                 # VERBOSE
@@ -307,7 +305,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/euroacustics/cnn.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/euroacustics/vlaai_pytorch.yaml", help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--cross_val", action='store_true', help="When included perform a 5 cross validation for the train_set")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
@@ -315,7 +313,7 @@ if __name__ == "__main__":
     parser.add_argument("--sync", action='store_true', help="When included register gradien on wandb")    
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='subj_independent', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
 

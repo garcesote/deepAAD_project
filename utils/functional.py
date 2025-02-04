@@ -157,24 +157,32 @@ def add_appendix(name, appendix):
     return name
     
 # Defines a model filename for saving and loading the model with all the config features
-def get_mdl_name(config):
-
-    model = config['model']
-    train_config = config['train_params']
-    dataset_config = config['dataset_params']
-    loss_config = config['loss_params']
-    mdl_config = config['model_params']
-
-    mdl_name = f'{model}_batch={train_config["batch_size"]}_block={dataset_config["window"]}_lr={train_config["lr"]}'
+def get_mdl_name(config, linear = False):
     
+    train_config = config.get('train_params')
+    dataset_config = config.get('dataset_params')
+    mdl_config = config.get('model_params')
+
+    if not linear:
+        model = config['model']
+        loss_config = config['loss_params']
+        mdl_name = f'{model}_batch={train_config["batch_size"]}_block={dataset_config["window"]}_lr={train_config["lr"]}'
+        if loss_config.get('mode') != 'mean': mdl_name = add_appendix(mdl_name, loss_config.get('mode'))
+        if loss_config.get('alpha_end'): mdl_name = add_appendix(mdl_name, 'alpha=' + str(loss_config.get('alpha_end')))
+    else:
+        linear_model = config['linear_model']
+        if linear_model == 'CCA':
+            mdl_name = f"{linear_model}_enc={mdl_config['encoder_len']}_dec={mdl_config['decoder_len']}_comp={mdl_config['n_components']}"
+        else:
+            mdl_name = f"{linear_model}_start={mdl_config['start_lag']}_end={mdl_config['end_lag']}"
+
     if mdl_config.get('dropout'): mdl_name = add_appendix(mdl_name, 'dr=' + str(mdl_config.get('dropout')))
+    if mdl_config.get('max_iter'): mdl_name = add_appendix(mdl_name, 'max_iter=' + str(mdl_config['max_iter']))
+    if mdl_config.get('tol'): mdl_name = add_appendix(mdl_name, 'tol=' + str(mdl_config['tol']))
     
     # Add extensions to the model name depending on the params
     if train_config.get('preproc_mode'): mdl_name = add_appendix(mdl_name, train_config.get('preproc_mode'))
     if dataset_config.get('eeg_band'): mdl_name = add_appendix(mdl_name, dataset_config.get('eeg_band'))
-    if loss_config.get('mode') != 'mean': mdl_name = add_appendix(mdl_name, loss_config.get('mode'))
-    if loss_config.get('alpha_end'): mdl_name = add_appendix(mdl_name, 'alpha=' + str(loss_config.get('alpha_end')))
-    
     if dataset_config.get('hrtf'): mdl_name = add_appendix(mdl_name, 'hrtf')
     if dataset_config.get('norm_hrtf_diff'): mdl_name = add_appendix(mdl_name, 'norm_diff')
     if dataset_config.get('fixed'): mdl_name = add_appendix(mdl_name, 'fixed')
@@ -257,7 +265,7 @@ def get_filename(mdl_folder_path, cv_fold=None):
     
     if cv_fold is None:
         for file in list_dir:
-            if cv_prefix in file:
+            if 'cvFold' not in file:
                 return file
         raise ValueError(f'The file on the folder {mdl_folder_path} was not found')
     

@@ -45,8 +45,6 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
         tag = 'evaluation_finetune' if finetuned else 'evaluation'
         tag = tag + '_spatial_clsf' if spatial_clsf else tag
 
-        window_accuracies = {win//64: None for win in window_list}
-
         # Config dataset
         ds_config = run['dataset_params']
         ds_config['leave_one_out'] = True if key == 'subj_independent' else False
@@ -82,19 +80,20 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
         time_shift = 100
 
         # Cross validation 
-        if cross_val and key != 'subj_independent':
+        if cross_val:
             n_folds = 5
-        elif cross_val and key != 'subj_independent':
-            n_folds = 3
         else:
             n_folds = 1
 
         for cv_fold in range(n_folds):
             
-            run['cv_fold'] = cv_fold
+            if cross_val: run['cv_fold'] = cv_fold
             run['key'] = key
+            run['dataset'] = dataset
             if wandb_upload: wandb.init(project=project, name=exp_name, tags=[tag], config=run)
             if not cross_val: cv_fold = None
+
+            window_accuracies = {win//64: None for win in window_list}
 
             for eval_window in window_list:
 

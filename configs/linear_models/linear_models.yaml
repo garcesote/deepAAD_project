@@ -5,19 +5,20 @@ global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
 
 runs:
 
-  - linear_model: 'CCA'
-    model_params:
-      encoder_len: 80
-      decoder_len: 16
-      n_components: 6
-    dataset_params:
-      fixed: False
-      rnd_trials: False
-
   - linear_model: 'Ridge'
     model_params:
       start_lag: -26
       end_lag: 0
+    dataset_params:
+      fixed: False
+      rnd_trials: False
+
+  - linear_model: 'CCA'
+    model_params:
+      encoder_len: 80
+      decoder_len: 16
+      n_components: 16
+      max_iter: 100
     dataset_params:
       fixed: False
       rnd_trials: False
