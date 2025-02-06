@@ -20,7 +20,7 @@ class Ridge:
         self.trial_len = trial_len
         if self.end_lag>0 and self.start_lag<0:
             self.num_lags+=1
-        self.per_trial = False
+        self.per_trial = per_trial
         self.best_alpha_idx=False
         
         if isinstance(alpha, Iterable):
@@ -115,15 +115,7 @@ class Ridge:
         assert n_input_features == self.n_input_features, f'Input must have {self.n_input_features} channels'
 
         # 1. Compute the lagged matrix
-        lagged_matrix = np.empty((self.num_lags*self.n_input_features, n_times))
-        if self.per_trial:
-            n_trials = n_times // self.trial_len
-            for n in tqdm(range(n_trials), desc="Computing lagged matrix"):
-                start = n * self.trial_len
-                end = start + self.trial_len
-                lagged_matrix[:, start:end] = self._get_lagged_matrix(X[start:end, :].T)
-        else:
-            lagged_matrix = self._get_lagged_matrix(X.T)
+        lagged_matrix = self._get_lagged_matrix(X.T)
         
         lagged_matrix = lagged_matrix.T # (L*C, T) => (T, L*C)
         
@@ -286,11 +278,10 @@ class Ridge_SKL:
         assert n_times==n_output_times
         
         # 2. Compute the lagged matrices
-        lagged_matrix = np.empty((self.num_lags*self.n_input_features, n_times))
-        lagged_matrix_val = np.empty((self.num_lags*self.n_input_features, n_times_val))
-
         if self.per_trial:
             n_trials = n_times // self.trial_len
+            lagged_matrix = np.zeros((self.num_lags*self.n_input_features, n_times))
+            lagged_matrix_val = np.zeros((self.num_lags*self.n_input_features, n_times_val))
             for n in tqdm(range(n_trials), desc="Computing lagged matrix"):
                 start = n * self.trial_len
                 end = start + self.trial_len
@@ -310,8 +301,9 @@ class Ridge_SKL:
                 ridge = Ridge_sklean(alpha)
                 ridge.fit(lagged_matrix, y_train)
                 
-                # Select the best alpha with the validation data
+                # Select the best alpha with the validation data and add a new axis
                 preds = ridge.predict(lagged_matrix_val)
+                preds = preds.reshape(-1, 1)
 
                 score = pearsonr(np.array(y_val[:, j], dtype=np.float64), preds[:, j])[0]
                 list_scores[i, j] = score
@@ -339,15 +331,7 @@ class Ridge_SKL:
         assert n_input_features == self.n_input_features, f'Input must have {self.n_input_features} channels'
 
         # Compute the lagged matrix
-        lagged_matrix = np.empty((self.num_lags*self.n_input_features, n_times))
-        if self.per_trial:
-            n_trials = n_times // self.trial_len
-            for n in tqdm(range(n_trials), desc="Computing lagged matrix"):
-                start = n * self.trial_len
-                end = start + self.trial_len
-                lagged_matrix[:, start:end] = self._get_lagged_matrix(X[start:end, :].T)
-        else:
-            lagged_matrix = self._get_lagged_matrix(X.T)
+        lagged_matrix = self._get_lagged_matrix(X.T)
         
         lagged_matrix = lagged_matrix.T # (L*C, T) => (T, L*C)
 
@@ -380,6 +364,7 @@ class Ridge_SKL:
 
             # Compute predictions
             p_batch = self.predict(x_batch)
+            p_batch = p_batch.reshape(-1, 1)
 
             # Get the scores (for loop when more than one output feature)
             scores.append([pearsonr(p_batch[:, opc], np.array(y_batch[:, opc], dtype=np.float64))[0] for opc in range(self.n_output_features)])

@@ -85,8 +85,8 @@ def main(config, dataset: str, key: str, cross_val: bool):
                         
                         # VALIDATE AND SELECT BEST ALPHA
                         scores = mdl.model_selection(val_set.eeg.T, val_set.stima.T)
-                        best_alpha = mdl.best_alpha_idx
-                        best_score = scores[best_alpha]
+                        best_alpha = alphas[mdl.best_alpha_idx]
+                        best_score = scores[mdl.best_alpha_idx]
 
                     mdl_filename = f"{mdl_prefix}_alpha={best_alpha:.2e}_acc={best_score:.3f}"
                     

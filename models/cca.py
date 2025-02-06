@@ -61,14 +61,15 @@ class CCA_AAD:
         n_chan, n_times = eeg.shape
         n_stim_chan = stim.shape[0]
         n_trial = n_times // self.trial_len
-        lagged_eeg = np.zeros((n_chan*self.decoder_len, n_times))
-        lagged_stim = np.zeros((n_stim_chan*self.encoder_len, n_times))
-        for trial in range(n_trial):
-            start = trial * self.trial_len
-            end = (trial+1) * self.trial_len
-            lagged_eeg[:,start:end] = self._get_lagged_matrix(eeg[:,start:end], pre_stim = False)
-            lagged_stim[:, start:end] = self._get_lagged_matrix(stim[:,start:end], pre_stim = True)
-
+        # lagged_eeg = np.zeros((n_chan*self.decoder_len, n_times))
+        # lagged_stim = np.zeros((n_stim_chan*self.encoder_len, n_times))
+        # for trial in range(n_trial):
+        #     start = trial * self.trial_len
+        #     end = (trial+1) * self.trial_len
+        #     lagged_eeg[:,start:end] = self._get_lagged_matrix(eeg[:,start:end], pre_stim = False)
+        #     lagged_stim[:, start:end] = self._get_lagged_matrix(stim[:,start:end], pre_stim = True)
+        lagged_eeg = self._get_lagged_matrix(eeg, pre_stim = False)
+        lagged_stim = self._get_lagged_matrix(stim, pre_stim = True)
         # Fit CCA
         self.model.fit(lagged_eeg.T, lagged_stim.T)
 

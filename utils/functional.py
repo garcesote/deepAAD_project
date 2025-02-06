@@ -179,6 +179,8 @@ def get_mdl_name(config, linear = False):
     if mdl_config.get('dropout'): mdl_name = add_appendix(mdl_name, 'dr=' + str(mdl_config.get('dropout')))
     if mdl_config.get('max_iter'): mdl_name = add_appendix(mdl_name, 'max_iter=' + str(mdl_config['max_iter']))
     if mdl_config.get('tol'): mdl_name = add_appendix(mdl_name, 'tol=' + str(mdl_config['tol']))
+    if mdl_config.get('per_trial'): mdl_name = add_appendix(mdl_name, 'per_trial')
+    if mdl_config.get('post_stim'): mdl_name = add_appendix(mdl_name, 'post_stim=' + str(mdl_config['post_stim']))
     
     # Add extensions to the model name depending on the params
     if train_config.get('preproc_mode'): mdl_name = add_appendix(mdl_name, train_config.get('preproc_mode'))

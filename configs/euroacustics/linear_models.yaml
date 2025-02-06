@@ -7,11 +7,12 @@ exp_name: 'linear_models'
 
 runs:
 
-  - linear_model: 'Ridge'
+  - linear_model: 'CCA'
     model_params:
-      start_lag: -26
-      end_lag: 0
-      per_trial: False
+      encoder_len: 80
+      decoder_len: 16
+      n_components: 4
+      max_iter: 100
     train_params:
       preproc_mode: null
     dataset_params:
@@ -34,46 +35,3 @@ runs:
       fixed: False
       rnd_trials: False
       window_pred: False
-
-  - linear_model: 'CCA'
-    model_params:
-      encoder_len: 80
-      decoder_len: 16
-      n_components: 4
-      max_iter: 2
-    train_params:
-      preproc_mode: False
-    dataset_params:
-      window: 50
-      hop: 1
-      fixed: False
-      rnd_trials: False
-      window_pred: False
-
-  # - linear_model: 'Ridge_scikit'
-  #   model_params:
-  #     start_lag: -26
-  #     end_lag: 0
-  #     per_trial: False
-  #   train_params:
-  #     preproc_mode: null
-  #   dataset_params:
-  #     window: 50
-  #     hop: 1
-  #     fixed: False
-  #     rnd_trials: False
-  #     window_pred: False
-
-  # - linear_model: 'Ridge_scikit'
-  #   model_params:
-  #     start_lag: -26
-  #     end_lag: 0
-  #     per_trial: False
-  #   train_params:
-  #     preproc_mode: null
-  #   dataset_params:
-  #     window: 50
-  #     hop: 1
-  #     fixed: False
-  #     rnd_trials: False
-  #     window_pred: False
