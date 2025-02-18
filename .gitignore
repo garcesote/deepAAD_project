@@ -2,4 +2,7 @@ results
 wandb
 figures
 logs
+__pycache__/
+*.pyc
+*.pyo
 .vscode/settings.json
