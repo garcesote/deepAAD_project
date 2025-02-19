@@ -72,7 +72,8 @@ class CustomDataset(Dataset):
     def __init__(self, dataset, data_path, split, subjects, cv_fold, window, hop, 
                  norm_stim=False, data_type = 'mat', leave_one_out = False,
                  fixed=False, rnd_trials=False, window_pred=True, hrtf=False,
-                 norm_hrtf_diff=False, eeg_band= None, spatial_locus=False, seed=42):
+                 norm_hrtf_diff=False, eeg_band= None, spatial_locus=False, stim_input = False,
+                 seed=42):
 
         if not isinstance(subjects, list):
             subjects = [subjects]
@@ -113,6 +114,7 @@ class CustomDataset(Dataset):
         self.norm_hrtf_diff = norm_hrtf_diff
         self.eeg_band = eeg_band
         self.spatial_locus = spatial_locus
+        self.stim_input = stim_input
         self.cv_fold = cv_fold
 
         if dataset == 'fulsang':
@@ -124,6 +126,19 @@ class CustomDataset(Dataset):
             self.stimb = None # No unattended stim on SparKuLee experiment
         else:
             raise ValueError('Introduce a valid dataset name between fulsang or skl')
+        
+        # STIM INPUT
+        if stim_input:
+
+            # Generate the corresponding labels
+            labels_a = torch.cat((torch.ones_like(self.stima), torch.zeros_like(self.stima)), dim=1)
+            labels_b = torch.cat((torch.zeros_like(self.stima), torch.ones_like(self.stima)), dim=1)
+            self.labels = torch.cat((labels_a, labels_b), dim=0)
+
+            # Duplicate the data with different stim order
+            self.eeg = torch.cat((self.eeg, self.eeg), dim=1)
+            self.stima = torch.cat((self.stima, self.stimb), dim=1)
+            self.stimb = torch.cat((self.stimb, self.stima), dim=1)            
 
         self.window = window
         self.n_samples = self.eeg.shape[1]
@@ -374,6 +389,11 @@ class CustomDataset(Dataset):
         stima = self.stima[:, start] if not self.window_pred else self.stima[0, start:end]
         if self.dataset != 'skl':
             stimb = self.stimb[:, start] if not self.window_pred else self.stimb[0, start:end]
-            return {'eeg':eeg, 'stima':stima, 'stimb':stimb}
+            if self.stim_input:
+                # Get the stimulus idx label from the starting point
+                labels = self.labels[:, start]
+                return {'eeg':eeg, 'stima':stima, 'stimb':stimb, 'labels':labels}
+            else:
+                return {'eeg':eeg, 'stima':stima, 'stimb':stimb}
         else:
             return {'eeg':eeg, 'stima':stima}

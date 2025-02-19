@@ -9,6 +9,7 @@ from models.dnn import FCNN, CNN
 from models.vlaai import VLAAI, VLAAI_old
 from models.vlaai_pytorch import VLAAI as VLAAI_pytorch
 from models.eeg_conformer import Conformer, ConformerConfig
+from models.add_net import AAD_Net, AAD_Net_Config
 
 # turn a tensor to 0 mean and std of 1 with shape (C, T) and return shape (C)   
 def normalize_eeg(tensor: torch.tensor):
@@ -254,6 +255,14 @@ def load_model(config_run, dataset, wandb_upload):
 
         mdl_config = ConformerConfig(**mdl_config)
         mdl = Conformer(mdl_config)
+
+    elif config_run['model'] == 'AAD_Net':
+
+        mdl_config = config_run['model_params'].copy()
+        mdl_config['eeg_chan'] = get_channels(dataset)
+
+        mdl_config = AAD_Net_Config(**mdl_config)
+        mdl =AAD_Net(mdl_config)
 
     else:
         raise ValueError('Introduce a valid model')
