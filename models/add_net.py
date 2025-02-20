@@ -184,6 +184,13 @@ class AAD_Net(nn.Module):
         denominator = torch.sqrt((preds_dev**2).sum(dim=-1) * (targets_dev**2).sum(dim=-1)) + eps
         return numerator / denominator
     
+    # Freeze inception blocks when finetunning
+    def finetune(self):
+        for param in self.stim_inception.parameters():
+            param.requires_grad=False
+        for param in self.eeg_inception.parameters():
+            param.requires_grad = False
+    
     def init_weights(self):
         for m in self.modules():
             if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Linear)):

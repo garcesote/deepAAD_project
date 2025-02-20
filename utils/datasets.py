@@ -137,8 +137,9 @@ class CustomDataset(Dataset):
 
             # Duplicate the data with different stim order
             self.eeg = torch.cat((self.eeg, self.eeg), dim=1)
-            self.stima = torch.cat((self.stima, self.stimb), dim=1)
-            self.stimb = torch.cat((self.stimb, self.stima), dim=1)            
+            stima, stimb = self.stima.clone(), self.stimb.clone()
+            self.stima = torch.cat((stima, stimb), dim=1)
+            self.stimb = torch.cat((stimb, stima), dim=1)            
 
         self.window = window
         self.n_samples = self.eeg.shape[1]

@@ -21,10 +21,8 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'euroacustics'
-    config['dataset'] = dataset
+    project = 'stim_input'
     exp_name = config['exp_name']
-    config['key'] = key
     
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
@@ -59,7 +57,8 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
         # Config dataset
         ds_config['leave_one_out'] = True if key == 'subj_independent' else False
         ds_val_config = ds_config.copy()
-        if ds_config['window_pred'] == False: ds_val_config['hop'] = 1 
+        if ds_config['window_pred'] == False: ds_val_config['hop'] = 1
+        stim_input = ds_config.get('stim_input', False)  
 
         # Config loss
         loss_mode = loss_config.get('mode', 'mean')
@@ -94,7 +93,9 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
 
                 # WANDB INIT
                 run['subject'] = subj
-                run['cv_fold'] = cv_fold
+                if cross_val: run['cv_fold'] = cv_fold
+                run['key'] = key
+                run['dataset'] = dataset
                 if wandb_upload: wandb.init(project=project, name=exp_name, tags=['finetune'], config=run)
 
                 # VERBOSE
@@ -109,7 +110,7 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
 
                 # LOAD THE MODEL
                 mdl = load_model(run, dataset, wandb_upload)
-                mdl.load_state_dict(torch.load(mdl_load_path, map_location=torch.device(device)))
+                mdl.load_state_dict(torch.load(mdl_load_path, map_location=torch.device(device), weights_only=True))
                 mdl.to(device)
                 mdl.finetune()
                 
@@ -171,27 +172,34 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
 
                     for batch, data in enumerate(train_loader_tqdm):
                         
+                        # Load the data
                         eeg = data['eeg'].to(device, dtype=torch.float)
                         stima = data['stima'].to(device, dtype=torch.float)
-                        stimb = data['stimb'].to(device, dtype=torch.float)
+                        if dataset != 'skl': stimb = data['stimb'].to(device, dtype=torch.float)
 
-                        # Forward the model and calculate the loss corresponding to the neg. Pearson coef
-                        with torch.autocast(device_type=device, dtype=torch.bfloat16):
-                            preds = mdl(eeg)
-                        
-                        targets = [stima, stimb] if 'penalty' in loss_mode else stima
+                        # Forward pass depending on the model inputs
+                        if stim_input:
+                            assert dataset != 'skl', "Not possible to forward the model with skl dataset as there's no unatt stim"
+                            with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                                preds = mdl(eeg, stima.unsqueeze(1), stimb.unsqueeze(1))
+                            targets = data['labels'].to(device, dtype=torch.float)
+                        else:
+                            with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                                preds = mdl(eeg)
+                            targets = [stima, stimb] if 'penalty' in loss_mode else stima
 
+                        # Compute the loss
                         loss_list = criterion(preds=preds, targets=targets)
                         loss = loss_list[0]
 
+                        # Backward pass
                         optimizer.zero_grad()
                         loss.backward()
                         optimizer.step()
                         
                         # Append neg. loss corresponding to the coef. Pearson
                         train_loss.append(loss_list)
-
-                        # Actualize the state of the train loss
+                        # Update the state of the train loss
                         train_loader_tqdm.set_postfix({'train_loss': loss})
 
                     mdl.eval()
@@ -207,20 +215,41 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
 
                             eeg = data['eeg'].to(device, dtype=torch.float)
                             stima = data['stima'].to(device, dtype=torch.float)
-                            stimb = data['stimb'].to(device, dtype=torch.float)
+                            if dataset != 'skl': stimb = data['stimb'].to(device, dtype=torch.float)
 
-                            preds = mdl(eeg)
-
-                            targets = [stima, stimb] if 'penalty' in loss_mode else stima
-
-                            loss_list = criterion(preds=preds, targets = targets)
+                            # Get model predictions
+                            if stim_input:
+                                assert dataset != 'skl', "Not possible to forward the model with skl dataset as there's no unatt stim"
+                                with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                                    preds = mdl(eeg, stima.unsqueeze(1), stimb.unsqueeze(1))
+                                targets = data['labels'].to(device, dtype=torch.float)
+                            else:
+                                with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                                    preds = mdl(eeg)
+                                targets = [stima, stimb] if 'penalty' in loss_mode else stima
+                            
+                            # Compute the loss
+                            loss_list = criterion(preds, targets)
                             loss = loss_list[0]
                             
-                            if stimb is not None:
-                                if loss_mode != 'spatial_locus':
-                                    # Decoding accuracy of the model
-                                    targets_unatt = [stimb, stima] if 'penalty' in loss_mode else stimb
-                                    unat_loss_list = criterion(preds=preds, targets = targets_unatt)
+                            # Decode accuracy
+                            if dataset != 'skl':
+                                # Direct classification based on the predictions
+                                if loss_mode == 'spatial_locus':
+                                    probs = F.sigmoid(preds)
+                                    pred_labels = (probs >= 0.5).float()
+                                    n_correct = torch.sum(pred_labels == stima).float()
+                                    if n_correct > batch_size / 2:
+                                        val_att_loss += 1
+                                elif stim_input:
+                                    pred_labels = (preds[:, 0] > preds[:, 1]).float()
+                                    n_correct = torch.sum(pred_labels == targets[:, 0]).float()
+                                    if n_correct > val_batch_size / 2:
+                                        val_att_loss += 1
+
+                                # Classification by comparing loss
+                                else:
+                                    unat_loss_list = criterion(preds=preds, targets = stimb)
                                     unat_loss = unat_loss_list[0]
                                     if loss.item() < unat_loss.item():
                                         val_att_loss += 1
@@ -230,12 +259,6 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                                             val_att_corr += 1
                                         if loss_list[2].item() < unat_loss_list[2].item():
                                             val_att_ild += 1
-                                else:
-                                    probs = F.sigmoid(preds)
-                                    pred_labels = (probs >= 0.5).float()
-                                    n_correct = torch.sum(pred_labels == stima)
-                                    if n_correct > batch_size // 2:
-                                        val_att_loss += 1
 
                             val_loss.append(loss_list)
 
@@ -308,7 +331,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/euroacustics/cnn.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/stim_input/aad_net.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
@@ -331,4 +354,4 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, args.key, not args.max_epoch, args.lr_decay)
+    main(config, wandb_upload, args.dataset, args.key, args.cross_val, not args.max_epoch, args.lr_decay)

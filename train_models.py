@@ -85,13 +85,6 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
             if not cross_val: cv_fold = None
 
             for subj in selected_subj:
-
-                # WANDB INIT
-                run['subject'] = subj
-                if cross_val: run['cv_fold'] = cv_fold
-                run['key'] = key
-                run['dataset'] = dataset
-                if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
                 
                 # VERBOSE
                 verbose('train', key, subj, dataset, model, loss_mode=loss_mode, cv_fold=cv_fold)
@@ -101,11 +94,18 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
                 mdl.to(device)
                 mdl_size = sum(p.numel() for p in mdl.parameters())
                 print(f'Model size: {mdl_size / 1e06:.2f}M')
-
+                
                 # WEIGHT INITILAIZATION
                 init_weights = train_config.get('init_weights', False)
-                # if init_weights: mdl.apply(mdl.init_weights)
                 if init_weights: mdl.init_weights()
+
+                # WANDB INIT
+                run['subject'] = subj
+                if cross_val: run['cv_fold'] = cv_fold
+                run['key'] = key
+                run['dataset'] = dataset
+                run['mdl_size'] = mdl_size
+                if wandb_upload: wandb.init(project=project, name=exp_name, tags=['training'], config=run)
 
                 if gradient_tracking and wandb_upload: wandb.watch(models=mdl, log='all')
 

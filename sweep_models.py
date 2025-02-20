@@ -43,7 +43,8 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
     # Config dataset
     ds_config['leave_one_out'] = True if key == 'subj_independent' else False
     ds_val_config = ds_config.copy()
-    if ds_config['window_pred'] == False: ds_val_config['hop'] = 1 
+    if ds_config['window_pred'] == False: ds_val_config['hop'] = 1
+    stim_input = ds_config.get('stim_input', False) 
 
     # Config loss
     loss_mode = loss_config.get('mode', 'mean')
@@ -55,27 +56,26 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
         selected_subj = get_subjects(dataset)
 
     for subj in selected_subj:
-
-        # WANDB INIT
-        run['subject'] = subj
-        run['cv_fold'] = cv_fold
-        run['key'] = key
-        wandb.init(project=project, tags=['sweep'], config=run)
         
         # VERBOSE
         verbose('train', key, subj, dataset, model, loss_mode=loss_mode, cv_fold=cv_fold)
         
         # LOAD THE MODEL
         mdl = load_model(run, dataset, True)
-
         mdl.to(device)
         mdl_size = sum(p.numel() for p in mdl.parameters())
-        run['mdl_size'] = mdl_size
-        run['subject'] = subj
 
         # WEIGHT INITILAIZATION
         init_weights = train_config.get('init_weights', False)
-        if init_weights: mdl.apply(mdl.init_weights)
+        if init_weights: mdl.init_weights()
+        
+        # WANDB INIT
+        run['subject'] = subj
+        run['cv_fold'] = cv_fold
+        run['key'] = key
+        run['dataset'] = dataset
+        run['mdl_size'] = mdl_size
+        wandb.init(project=project, tags=['training'], config=run)
 
         # LOAD THE DATA
         data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
@@ -128,26 +128,37 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
             train_loader_tqdm = tqdm(train_loader, desc=f'Epoch {epoch}/{max_epoch}', leave=False, mininterval=0.5)
 
             for batch, data in enumerate(train_loader_tqdm):
-
+                        
+                # Load the data
                 eeg = data['eeg'].to(device, dtype=torch.float)
                 stima = data['stima'].to(device, dtype=torch.float)
+                if dataset != 'skl': stimb = data['stimb'].to(device, dtype=torch.float)
 
-                # Forward the model and calculate the loss corresponding to the neg. Pearson coef
-                with torch.autocast(device_type=device, dtype=torch.bfloat16):
-                    preds = mdl(eeg)
+                # Forward pass depending on the model inputs
+                if stim_input:
+                    assert dataset != 'skl', "Not possible to forward the model with skl dataset as there's no unatt stim"
+                    with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                        preds = mdl(eeg, stima.unsqueeze(1), stimb.unsqueeze(1))
+                    targets = data['labels'].to(device, dtype=torch.float)
+                else:
+                    with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                        preds = mdl(eeg)
+                    targets = [stima, stimb] if 'penalty' in loss_mode else stima
 
-                loss_list = criterion(preds=preds, targets=stima)
+                # Compute the loss
+                loss_list = criterion(preds, targets)
                 loss = loss_list[0]
 
+                # Backward pass
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-
+                
                 # Append neg. loss corresponding to the coef. Pearson
                 train_loss.append(loss_list)
-
-                # Update the state of the train loss
+                # Update the state of the train loss 
                 train_loader_tqdm.set_postfix({'train_loss': loss.item()})
+
 
             mdl.eval()
             val_loss = []
@@ -160,38 +171,76 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
 
                     eeg = data['eeg'].to(device, dtype=torch.float)
                     stima = data['stima'].to(device, dtype=torch.float)
+                    if dataset != 'skl': stimb = data['stimb'].to(device, dtype=torch.float)
 
-                    preds = mdl(eeg)
-
-                    loss_list = criterion(preds=preds, targets=stima)
+                    # Get model predictions
+                    if stim_input:
+                        assert dataset != 'skl', "Not possible to forward the model with skl dataset as there's no unatt stim"
+                        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                            preds = mdl(eeg, stima.unsqueeze(1), stimb.unsqueeze(1))
+                        targets = data['labels'].to(device, dtype=torch.float)
+                    else:
+                        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                            preds = mdl(eeg)
+                        targets = [stima, stimb] if 'penalty' in loss_mode else stima
+                    
+                    # Compute the loss
+                    loss_list = criterion(preds, targets)
                     loss = loss_list[0]
 
-                    if ds_config.get('dec_acc', True):
-                        stimb = data['stimb'].to(device, dtype=torch.float)
-                        # Decoding accuracy of the model
-                        unat_loss = criterion(preds=preds, targets=stimb)[0]
-                        if loss.item() < unat_loss.item():
-                            val_att_corr += 1
+                    # Decode accuracy
+                    if dataset != 'skl':
+                        # Direct classification based on the predictions
+                        if loss_mode == 'spatial_locus':
+                            probs = F.sigmoid(preds)
+                            pred_labels = (probs >= 0.5).float()
+                            n_correct = torch.sum(pred_labels == stima).float()
+                            if n_correct > batch_size / 2:
+                                val_att_loss += 1
+                        elif stim_input:
+                            pred_labels = (preds[:, 0] > preds[:, 1]).float()
+                            n_correct = torch.sum(pred_labels == targets[:, 0]).float()
+                            if n_correct > val_batch_size / 2:
+                                val_att_loss += 1
+
+                        # Classification by comparing loss
+                        else:
+                            unat_loss_list = criterion(preds=preds, targets = stimb)
+                            unat_loss = unat_loss_list[0]
+                            if loss.item() < unat_loss.item():
+                                val_att_loss += 1
+                            # When multiple loss compute the accuracy for each metric
+                            if len(loss_list) > 1:
+                                if loss_list[1].item() < unat_loss_list[1].item():
+                                    val_att_corr += 1
+                                if loss_list[2].item() < unat_loss_list[2].item():
+                                    val_att_ild += 1
 
                     val_loss.append(loss_list)
 
             mean_val_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in val_loss])).item()
             mean_train_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in train_loss])).item()
             val_decAccuracy = val_att_corr / len(val_loader) * 100
+            val_corr_decAccuracy = val_att_corr / len(val_loader) * 100
+            val_ild_decAccuracy = val_att_ild / len(val_loader) * 100
 
             scheduler.step(-mean_val_loss)
 
             # Logging metrics
-            print(f'Epoch: {epoch} | Train loss: {-mean_train_loss:.4f} | Val loss/acc: {-mean_val_loss:.4f}/{val_decAccuracy:.4f}')
-
-            wandb_log = {'epoch': epoch,'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
+            if multiple_loss_opt(loss_mode):
+                print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f} | Val ild_acc: {val_ild_decAccuracy} | Val corr_acc: {val_corr_decAccuracy}')
+            else:
+                print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
             
+            wandb_log = {'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
             # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
-            if multiple_loss_opt(loss_config['mode']):
+            if multiple_loss_opt(loss_mode):
                 wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
                 wandb_log['train_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in train_loss])).item()
+                wandb_log['val_acc_corr'] = val_corr_decAccuracy
                 wandb_log['val_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in val_loss])).item()
                 wandb_log['train_ild'] = torch.mean(torch.hstack([loss_list[2] for loss_list in train_loss])).item()
+                wandb_log['val_acc_ild'] = val_ild_decAccuracy
             wandb.log(wandb_log)
 
             # Save best results

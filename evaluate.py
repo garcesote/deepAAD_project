@@ -23,7 +23,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'euroacustics'
+    project = 'stim_input'
     exp_name = config['exp_name']
     # window_list = [64, 128, 320, 640, 1280, 2560] # 1s, 2s, 5s, 10s, 20s, 40s
     window_list = [64, 128, 320, 640, 1600, 3200] # 1s, 2s, 5s, 10s, 25s, 50s
@@ -48,13 +48,13 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
         # Config dataset
         ds_config = run['dataset_params']
         ds_config['leave_one_out'] = True if key == 'subj_independent' else False
-        ds_config['hop'] = 1 if key == 'subj_independent' else False
-        if ds_config['window_pred'] == False: ds_config['hop'] = 1 
+        # ds_config['hop'] = 1 if key == 'subj_independent' else False
+        if ds_config['window_pred'] == False: ds_config['hop'] = 1
+        stim_input = ds_config.get('stim_input', False)  
 
         # Config training
         train_params = run['train_params']
         preproc_mode = train_params.get('preproc_mode')
-        batch_size = train_params.get('batch_size')
         shuffle = train_params.get('shuffle')
         shuffle_test = shuffle if ds_config.get('window_pred') else False
         metrics_norm = train_params.get('metrics_norm', None)
@@ -101,6 +101,8 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                 nd_results = {} # construct a null distribution when evaluating
                 dec_results = []
 
+                batch_size = 1 if ds_config.get('window_pred') else eval_window
+
                 for subj in selected_subjects:
                     
                     subj_name ='population' if eval_population else subj
@@ -136,7 +138,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                     
                     # LOAD THE MODEL
                     mdl = load_model(run, dataset, wandb_upload)
-                    mdl.load_state_dict(torch.load(mdl_load_path, map_location=torch.device(device)))
+                    mdl.load_state_dict(torch.load(mdl_load_path, map_location=torch.device(device), weights_only=True))
                     mdl.to(device)
 
                     # LOAD THE DATA
@@ -156,7 +158,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                     # WHEN MULTIPLE METRICS OPTIMIZED USE A LINEAR CLASSIFIER
                     if spatial_clsf and multiple_loss_opt(loss_mode):
                         
-                        classifier = CustomClassifier('LDA', mdl, criterion, batch_size=eval_window, shuffle=shuffle_test, normalize=metrics_norm)
+                        classifier = CustomClassifier('LDA', mdl, criterion, batch_size=batch_size, shuffle=shuffle_test, normalize=metrics_norm)
 
                         # LOAD TRAIN DATA AND FIT CLASSIFIER
                         train_set = CustomDataset(
@@ -169,7 +171,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                         classifier.fit(train_set=train_set)
 
                         # EVALUATE THE CLASSIFIER WITH TEST SET
-                        labels, metrics, accuracies = classifier.eval(test_set= test_set)
+                        labels, metrics, accuracies = classifier.eval(test_set=test_set)
 
                         # SAVE RESULTS FOT MESD
                         dec_results.append(accuracies[2])
@@ -184,7 +186,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                     # NO NEED TO CLASSIFY WHEN ONE METRIC IT'S EMPLOYED
                     else:
 
-                        test_loader = DataLoader(test_set, batch_size=eval_window, shuffle= shuffle_test, pin_memory=True)
+                        test_loader = DataLoader(test_set, batch_size=batch_size, shuffle= shuffle_test, pin_memory=True)
                         
                         # EVALUATE THE MODEL
                         eval_loss = []
@@ -197,28 +199,46 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                                 
                                 eeg = data['eeg'].to(device, dtype=torch.float)
                                 stima = data['stima'].to(device, dtype=torch.float)
+                                if dataset != 'skl': stimb = data['stimb'].to(device, dtype=torch.float)
                                 
-                                preds = mdl(eeg)
-
-                                loss_list = criterion(preds=preds, targets = stima)
+                                # Get model predictions
+                                if stim_input:
+                                    assert dataset != 'skl', "Not possible to forward the model with skl dataset as there's no unatt stim"
+                                    with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                                        preds = mdl(eeg, stima.unsqueeze(1), stimb.unsqueeze(1))
+                                    targets = data['labels'].to(device, dtype=torch.float)
+                                else:
+                                    with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                                        preds = mdl(eeg)
+                                    targets = [stima, stimb] if 'penalty' in loss_mode else stima
+                                
+                                # Compute the loss
+                                loss_list = criterion(preds, targets)
                                 loss = loss_list[0]
 
                                 # Calculates Pearson's coef. for the matching distribution and for the null one
-                                nd_loss = criterion(preds=preds, targets = torch.roll(stima, time_shift))[0]
+                                nd_loss = criterion(preds=preds, targets=torch.roll(targets, time_shift))[0]
 
-                                if data.get('stimb') is not None:
-                                    # if loss_mode != 'spatial_locus':
-                                    stimb = data['stimb'].to(device, dtype=torch.float)
-                                    # Decoding accuracy of the model
-                                    unat_loss_list = criterion(preds=preds, targets = stimb)
-                                    unat_loss = unat_loss_list[0]
-                                    if loss.item() < unat_loss.item():
-                                        att_corr += 1                                    
-                                    else:
+                                # Decode accuracy
+                                if dataset != 'skl':
+                                    # Direct classification based on the predictions
+                                    if loss_mode == 'spatial_locus':
                                         probs = F.sigmoid(preds)
                                         pred_labels = (probs >= 0.5).float()
-                                        n_correct = torch.sum(pred_labels == stima)
-                                        if n_correct > eval_window // 2:
+                                        n_correct = torch.sum(pred_labels == stima).float()
+                                        if n_correct > batch_size / 2:
+                                            att_corr += 1
+                                    elif stim_input:
+                                        pred_labels = (preds[:, 0] > preds[:, 1]).float()
+                                        n_correct = torch.sum(pred_labels == targets[:, 0]).float()
+                                        if n_correct > batch_size / 2:
+                                            att_corr += 1
+
+                                    # Classification by comparing loss
+                                    else:
+                                        unat_loss_list = criterion(preds=preds, targets = stimb)
+                                        unat_loss = unat_loss_list[0]
+                                        if loss.item() < unat_loss.item():
                                             att_corr += 1
 
                                 # Append all losses for eval results
@@ -257,18 +277,18 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                 # UPLOAD RESULTS TO WANDB
                 if wandb_upload:
                     wandb_log = {'window': eval_window, 
-                                'decAcc_subj_mean': np.mean(dec_results), 
-                                'decAcc_subj_std': np.std(dec_results)
-                                }
+                        'decAcc_subj_mean': np.mean(dec_results), 
+                        'decAcc_subj_std': np.std(dec_results)
+                    }
                     # Upload the loss when not using the LDA
                     if not spatial_clsf:
                         loss_mean_results = [results[0] for results in eval_mean_results]
                         wandb_log = {'window': eval_window, 
-                                        'loss_subj_mean': np.mean(loss_mean_results), 
-                                        'loss_subj_std': np.std(loss_mean_results), 
-                                        'decAcc_subj_mean': np.mean(dec_results), 
-                                        'decAcc_subj_std': np.std(dec_results)
-                                    }
+                            'loss_subj_mean': np.mean(loss_mean_results), 
+                            'loss_subj_std': np.std(loss_mean_results), 
+                            'decAcc_subj_mean': np.mean(dec_results), 
+                            'decAcc_subj_std': np.std(dec_results)
+                        }
                         # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
                         if multiple_loss_opt(loss_mode):
                             wandb_log['corr_subj_mean'] = np.mean([results[1] for results in eval_mean_results])
@@ -312,10 +332,10 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/euroacustics/cnn.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/stim_input/aad_net.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--finetuned", action='store_true', help="When included search for the model on the finetune folder")
     parser.add_argument("--cross_val", action='store_true', help="When included select the cross validation models")    
     parser.add_argument("--eval_population", action='store_true', help="When included evaluate by fitting a classifier with both")    
@@ -327,8 +347,8 @@ if __name__ == "__main__":
     wandb_upload = args.wandb
 
     # Introduce path to the mesd-toolbox
-    sys.path.append("C:/Users/jaulab/Desktop/AAD/mesd-toolbox/mesd-toolbox-python")
-    # sys.path.append("C:/Users/garce/Desktop/proyecto_2024/mesd-toolbox/mesd-toolbox-python")
+    # sys.path.append("C:/Users/jaulab/Desktop/AAD/mesd-toolbox/mesd-toolbox-python")
+    sys.path.append("C:/Users/garce/Desktop/proyecto_2024/mesd-toolbox/mesd-toolbox-python")
     from mesd_toolbox import compute_MESD
     
     # Upload results to wandb
