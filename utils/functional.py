@@ -261,6 +261,17 @@ def load_model(config_run, dataset, wandb_upload):
         mdl_config = config_run['model_params'].copy()
         mdl_config['eeg_chan'] = get_channels(dataset)
 
+        if wandb_upload:
+            # Sweep params implemented
+            mdl_config['eeg_transform'] = getattr(wandb.config, 'eeg_transform', mdl_config.get('eeg_transform'))
+            mdl_config['eeg_out_feat'] = getattr(wandb.config, 'eeg_out_feat', mdl_config.get('eeg_out_feat'))
+            mdl_config['eeg_feat_kernel'] = getattr(wandb.config, 'eeg_feat_kernel', mdl_config.get('eeg_feat_kernel'))
+            mdl_config['eeg_pool'] = getattr(wandb.config, 'eeg_pool', mdl_config.get('eeg_pool'))
+            mdl_config['stim_transform'] = getattr(wandb.config, 'stim_transform', mdl_config.get('stim_transform'))
+            mdl_config['stim_out_feat'] = getattr(wandb.config, 'stim_out_feat', mdl_config.get('stim_out_feat'))
+            mdl_config['stim_feat_kernel'] = getattr(wandb.config, 'stim_feat_kernel', mdl_config.get('stim_feat_kernel'))
+            mdl_config['stim_pool'] = getattr(wandb.config, 'stim_pool', mdl_config.get('stim_pool'))
+
         mdl_config = AAD_Net_Config(**mdl_config)
         mdl =AAD_Net(mdl_config)
 

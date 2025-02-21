@@ -162,7 +162,7 @@ class CustomLoss(nn.Module):
         
         elif self.mode == 'stim_prob':
             # Use the BCE loss to measure the accuracy between the porbs predicted and the true labels
-            loss = F.binary_cross_entropy(preds, targets)
+            loss = F.binary_cross_entropy(preds, targets) # [:, 0] as only one label and pred is needed
             return [loss]
         
         else:

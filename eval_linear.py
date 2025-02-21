@@ -135,7 +135,7 @@ def main(config, dataset: str, key: str, cross_val: bool, wandb_upload: bool):
                     print(f'Subject {subj} | corr_mean {np.mean(scores_a):.4f} | decode_accuracy {accuracy}')
 
                 if wandb_upload:
-                        wandb.log({'window': window, 'corr_subj_mean': np.mean(eval_mean_results), 'corr_subj_std': np.std(eval_mean_results), 'decAcc_subj_mean': np.mean(dec_results), 'decAcc_subj_std': np.std(dec_results)})
+                    wandb.log({'window': window, 'corr_subj_mean': np.mean(eval_mean_results), 'corr_subj_std': np.std(eval_mean_results), 'decAcc_subj_mean': np.mean(dec_results), 'decAcc_subj_std': np.std(dec_results)})
 
                 # Save the window results to compute mesd
                 window_accuracies[window//64] = dec_results

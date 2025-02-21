@@ -131,9 +131,10 @@ class CustomDataset(Dataset):
         if stim_input:
 
             # Generate the corresponding labels
-            labels_a = torch.cat((torch.ones_like(self.stima), torch.zeros_like(self.stima)), dim=1)
-            labels_b = torch.cat((torch.zeros_like(self.stima), torch.ones_like(self.stima)), dim=1)
-            self.labels = torch.cat((labels_a, labels_b), dim=0)
+            # labels_a = torch.cat((torch.ones_like(self.stima), torch.zeros_like(self.stima)), dim=1)
+            # labels_b = torch.cat((torch.zeros_like(self.stima), torch.ones_like(self.stima)), dim=1)
+            # self.labels = torch.cat((labels_a, labels_b), dim=0)
+            self.labels = torch.cat((torch.ones_like(self.stima), torch.zeros_like(self.stima)), dim=1)
 
             # Duplicate the data with different stim order
             self.eeg = torch.cat((self.eeg, self.eeg), dim=1)

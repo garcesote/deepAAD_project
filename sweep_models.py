@@ -13,6 +13,7 @@ from utils.sampler import BatchRandomSampler
 import torch
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import torch.functional as F
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -28,10 +29,8 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
     loss_config = run['loss_params']
 
     # Config training
-    batch_size = train_config['batch_size']
     lr = float(train_config['lr'])
     max_epoch = train_config.get('max_epoch', 200)
-    weight_decay = float(train_config.get('weight_decay', 1e-8))
     scheduler_patience = train_config.get('scheduler_patience', 10)
     early_stopping_patience = train_config['early_stopping_patience'] if early_stop else max_epoch
     batch_rnd_sampler = train_config.get('batch_rnd_sampler', False)
@@ -60,6 +59,13 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
         # VERBOSE
         verbose('train', key, subj, dataset, model, loss_mode=loss_mode, cv_fold=cv_fold)
         
+        # WANDB INIT
+        run['subject'] = subj
+        run['cv_fold'] = cv_fold
+        run['key'] = key
+        run['dataset'] = dataset
+        wandb.init(project=project, tags=['sweep'], config=run)
+
         # LOAD THE MODEL
         mdl = load_model(run, dataset, True)
         mdl.to(device)
@@ -69,14 +75,10 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
         init_weights = train_config.get('init_weights', False)
         if init_weights: mdl.init_weights()
         
-        # WANDB INIT
-        run['subject'] = subj
-        run['cv_fold'] = cv_fold
-        run['key'] = key
-        run['dataset'] = dataset
-        run['mdl_size'] = mdl_size
-        wandb.init(project=project, tags=['training'], config=run)
-
+        # Sweep training params
+        batch_size = getattr(wandb.config, 'batch_size', train_config['batch_size'])
+        weight_decay = float(getattr(wandb.config, 'weight_decay', train_config.get('weight_decay', 1e-8)))
+        
         # LOAD THE DATA
         data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
         train_set = CustomDataset(
@@ -196,25 +198,25 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
                             pred_labels = (probs >= 0.5).float()
                             n_correct = torch.sum(pred_labels == stima).float()
                             if n_correct > batch_size / 2:
-                                val_att_loss += 1
+                                val_att_corr += 1
                         elif stim_input:
-                            pred_labels = (preds[:, 0] > preds[:, 1]).float()
-                            n_correct = torch.sum(pred_labels == targets[:, 0]).float()
+                            pred_labels = (preds >= 0.5).float()
+                            n_correct = torch.sum(pred_labels == targets).float()
                             if n_correct > val_batch_size / 2:
-                                val_att_loss += 1
+                                val_att_corr += 1
 
                         # Classification by comparing loss
                         else:
                             unat_loss_list = criterion(preds=preds, targets = stimb)
                             unat_loss = unat_loss_list[0]
                             if loss.item() < unat_loss.item():
-                                val_att_loss += 1
+                                val_att_corr += 1
                             # When multiple loss compute the accuracy for each metric
                             if len(loss_list) > 1:
                                 if loss_list[1].item() < unat_loss_list[1].item():
                                     val_att_corr += 1
                                 if loss_list[2].item() < unat_loss_list[2].item():
-                                    val_att_ild += 1
+                                    val_att_corr += 1
 
                     val_loss.append(loss_list)
 
@@ -222,7 +224,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
             mean_train_loss = torch.mean(torch.hstack([loss_list[0] for loss_list in train_loss])).item()
             val_decAccuracy = val_att_corr / len(val_loader) * 100
             val_corr_decAccuracy = val_att_corr / len(val_loader) * 100
-            val_ild_decAccuracy = val_att_ild / len(val_loader) * 100
+            val_ild_decAccuracy = val_att_corr / len(val_loader) * 100
 
             scheduler.step(-mean_val_loss)
 
@@ -232,7 +234,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
             else:
                 print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
             
-            wandb_log = {'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
+            wandb_log = {'mdl_size': mdl_size, 'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
             # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
             if multiple_loss_opt(loss_mode):
                 wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
@@ -253,7 +255,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
 def main(config, dataset, key):
 
     global_data_path = config['global_data_path']
-    project = 'spatial_audio'
+    project = 'stim_input'
     config['dataset'] = dataset
     config['key'] = key
     cross_val = None
@@ -270,7 +272,7 @@ def main(config, dataset, key):
 
 if __name__ == "__main__":
 
-    config_path = 'configs/euroacustics/conformer.yaml'
+    config_path = 'configs/stim_input/aad_net.yaml'
     dataset = 'fulsang'
     key = 'population'
 

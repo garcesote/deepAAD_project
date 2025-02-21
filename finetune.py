@@ -242,8 +242,8 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                                     if n_correct > batch_size / 2:
                                         val_att_loss += 1
                                 elif stim_input:
-                                    pred_labels = (preds[:, 0] > preds[:, 1]).float()
-                                    n_correct = torch.sum(pred_labels == targets[:, 0]).float()
+                                    pred_labels = (preds >= 0.5).float()
+                                    n_correct = torch.sum(pred_labels == targets).float()
                                     if n_correct > val_batch_size / 2:
                                         val_att_loss += 1
 

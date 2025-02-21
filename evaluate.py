@@ -229,8 +229,8 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                                         if n_correct > batch_size / 2:
                                             att_corr += 1
                                     elif stim_input:
-                                        pred_labels = (preds[:, 0] > preds[:, 1]).float()
-                                        n_correct = torch.sum(pred_labels == targets[:, 0]).float()
+                                        pred_labels = (preds >= 0.5).float()
+                                        n_correct = torch.sum(pred_labels == targets).float()
                                         if n_correct > batch_size / 2:
                                             att_corr += 1
 

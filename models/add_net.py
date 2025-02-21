@@ -36,7 +36,8 @@ class Inception_Block(nn.Module):
 
         # Branch containing the pooling operation
         if pool:
-            self.pool = nn.MaxPool1d(kernel_size=pool, stride=1, padding=1)
+            padding = (pool - 1) // 2  # Adjust the padding depending on the kernel_size
+            self.pool = nn.MaxPool1d(kernel_size=pool, stride=1, padding=padding)
             self.pool_compressor = nn.Conv1d(input_channels, out_feat, kernel_size=1)
 
         # Batch norm layers
@@ -115,7 +116,7 @@ class AAD_Net_Config:
     stim_pool:int = None
 
     # Classifier
-    out_dim:int = 2
+    out_dim:int = 1
     hidden_size:int = 16
     dropout:float = 0.4
     
@@ -153,11 +154,11 @@ class AAD_Net(nn.Module):
         coefs = self.compute_correlation(eeg_broad, stim_broad) # (B, 2*Cs, Ce)
         coefs = torch.flatten(coefs, start_dim=1) # (B, 2*Cs*Ce)
 
-        # Classify the coefficients and apply Softmax for probs
-        logits = self.classifier(coefs)
-        preds = torch.softmax(logits, dim=1)
+        # Classify the coefficients and apply Sigmoid for probs
+        logit = self.classifier(coefs)
+        prob = torch.sigmoid(logit).float()
 
-        return preds
+        return prob
 
     def compute_correlation(self, preds, targets, eps=1e-8):
 
