@@ -242,18 +242,19 @@ def load_model(config_run, dataset, wandb_upload):
         mdl_config = config_run['model_params'].copy()
         mdl_config['eeg_channels'] = get_channels(dataset)
         mdl_config['kernel_chan'] = get_channels(dataset)
+
+        mdl_config = ConformerConfig(**mdl_config)
         
         if wandb_upload:
             # Sweep params implemented
-            mdl_config['dropout'] = getattr(wandb.config, 'dropout', mdl_config.get('dropout'))
-            mdl_config['dropout_clsf'] = getattr(wandb.config, 'dropout_clsf', mdl_config.get('dropout_clsf'))
-            mdl_config['enc_layers'] = getattr(wandb.config, 'enc_layers', mdl_config.get('enc_layers'))
-            mdl_config['n_embd'] = getattr(wandb.config, 'n_embd', mdl_config.get('n_embd'))
-            mdl_config['pool'] = getattr(wandb.config, 'pool', mdl_config.get('pool'))
-            mdl_config['pool_hop'] = getattr(wandb.config, 'pool_hop', mdl_config.get('pool_hop'))
-            mdl_config['hidden_size'] = getattr(wandb.config, 'hidden_size', mdl_config.get('hidden_size'))
-
-        mdl_config = ConformerConfig(**mdl_config)
+            mdl_config.dropout = getattr(wandb.config, 'dropout', mdl_config.dropout)
+            mdl_config.dropout_clsf = getattr(wandb.config, 'dropout_clsf', mdl_config.dropout_clsf)
+            mdl_config.enc_layers = getattr(wandb.config, 'enc_layers', mdl_config.enc_layers)
+            mdl_config.n_embd = getattr(wandb.config, 'n_embd', mdl_config.n_embd)
+            mdl_config.pool = getattr(wandb.config, 'pool', mdl_config.pool)
+            mdl_config.pool_hop = getattr(wandb.config, 'pool_hop', mdl_config.pool_hop)
+            mdl_config.hidden_size = getattr(wandb.config, 'hidden_size', mdl_config.hidden_size)
+        
         mdl = Conformer(mdl_config)
 
     elif config_run['model'] == 'AAD_Net':
@@ -261,19 +262,22 @@ def load_model(config_run, dataset, wandb_upload):
         mdl_config = config_run['model_params'].copy()
         mdl_config['eeg_chan'] = get_channels(dataset)
 
+        mdl_config = AAD_Net_Config(**mdl_config)
+
         if wandb_upload:
             # Sweep params implemented
-            mdl_config['eeg_transform'] = getattr(wandb.config, 'eeg_transform', mdl_config.get('eeg_transform'))
-            mdl_config['eeg_out_feat'] = getattr(wandb.config, 'eeg_out_feat', mdl_config.get('eeg_out_feat'))
-            mdl_config['eeg_feat_kernel'] = getattr(wandb.config, 'eeg_feat_kernel', mdl_config.get('eeg_feat_kernel'))
-            mdl_config['eeg_pool'] = getattr(wandb.config, 'eeg_pool', mdl_config.get('eeg_pool'))
-            mdl_config['stim_transform'] = getattr(wandb.config, 'stim_transform', mdl_config.get('stim_transform'))
-            mdl_config['stim_out_feat'] = getattr(wandb.config, 'stim_out_feat', mdl_config.get('stim_out_feat'))
-            mdl_config['stim_feat_kernel'] = getattr(wandb.config, 'stim_feat_kernel', mdl_config.get('stim_feat_kernel'))
-            mdl_config['stim_pool'] = getattr(wandb.config, 'stim_pool', mdl_config.get('stim_pool'))
+            mdl_config.eeg_transform = getattr(wandb.config, 'eeg_transform', mdl_config.eeg_transform)
+            mdl_config.eeg_out_feat = getattr(wandb.config, 'eeg_out_feat', mdl_config.eeg_out_feat)
+            mdl_config.eeg_feat_kernel = getattr(wandb.config, 'eeg_feat_kernel', mdl_config.eeg_feat_kernel)
+            
+            mdl_config.stim_transform = getattr(wandb.config, 'stim_transform', mdl_config.stim_transform)
+            mdl_config.stim_out_feat = getattr(wandb.config, 'stim_out_feat', mdl_config.stim_out_feat)
+            mdl_config.stim_feat_kernel = getattr(wandb.config, 'stim_feat_kernel', mdl_config.stim_feat_kernel)
+            
+            mdl_config.eeg_pool = getattr(wandb.config, 'eeg_pool', mdl_config.eeg_pool)
+            mdl_config.stim_pool = getattr(wandb.config, 'stim_pool', mdl_config.stim_pool)
 
-        mdl_config = AAD_Net_Config(**mdl_config)
-        mdl =AAD_Net(mdl_config)
+        mdl = AAD_Net(mdl_config)
 
     else:
         raise ValueError('Introduce a valid model')

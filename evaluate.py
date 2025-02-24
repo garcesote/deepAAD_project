@@ -29,6 +29,8 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
     window_list = [64, 128, 320, 640, 1600, 3200] # 1s, 2s, 5s, 10s, 25s, 50s
     # window_list = [3200]
     
+    wandb_upload = True
+    
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
         set_seeds(config['seed'])
@@ -62,6 +64,12 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
         # Config loss
         loss_params = run['loss_params']
         loss_mode = loss_params.get('mode', 'mean')
+
+        # If the finetunning loss is different from the original (used for saving)
+        run['loss_params']['mode'] = run.get('finetune_loss', loss_mode)
+        
+        # Define the model_name
+        mdl_name = get_mdl_name(run)
         
         # If the loss mode only takes ILD into account and is finetunned, eval with both correlation and ils with alpha=0.1
         if loss_mode in ['ild_mae', 'ild_mse'] and finetuned:
@@ -101,7 +109,9 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                 nd_results = {} # construct a null distribution when evaluating
                 dec_results = []
 
+                # For window pred (1, eval_window, T) and for sample pred (eval_window, window, T)
                 batch_size = 1 if ds_config.get('window_pred') else eval_window
+                if ds_config.get('window_pred'): ds_config['window'] = eval_window
 
                 for subj in selected_subjects:
                     
@@ -109,10 +119,6 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                     str_win = str(eval_window//64)+'s'
 
                     verbose('evaluate', key, subj, dataset, model, eval_window//64, loss_mode, cv_fold=cv_fold)
-
-                    # If the finetunning loss is different from the original (used for saving)
-                    run['loss_params']['mode'] = run.get('finetune_loss', loss_mode)
-                    mdl_name = get_mdl_name(run)
 
                     if finetuned:
                         eval_path, dec_path = 'eval_finetuned_metrics', 'decode_finetuned_accuracy'  
@@ -332,7 +338,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/stim_input/aad_net.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/stim_input/fast_aad_net.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
@@ -347,8 +353,8 @@ if __name__ == "__main__":
     wandb_upload = args.wandb
 
     # Introduce path to the mesd-toolbox
-    # sys.path.append("C:/Users/jaulab/Desktop/AAD/mesd-toolbox/mesd-toolbox-python")
-    sys.path.append("C:/Users/garce/Desktop/proyecto_2024/mesd-toolbox/mesd-toolbox-python")
+    sys.path.append("C:/Users/jaulab/Desktop/AAD/mesd-toolbox/mesd-toolbox-python")
+    # sys.path.append("C:/Users/garce/Desktop/proyecto_2024/mesd-toolbox/mesd-toolbox-python")
     from mesd_toolbox import compute_MESD
     
     # Upload results to wandb

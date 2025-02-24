@@ -1,0 +1,32 @@
+global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
+# global_data_path: 'D:\igarcia\AAD_Data'
+# global_path: 'C:/Users/garce/Desktop/proyecto_2024/deepAAD_project'
+# global_data_path: 'C:/Users/garce/Desktop/proyecto_2024/Data'
+
+exp_name: 'AAD_Net_fast'
+
+runs: # All models trained with window size of 5s
+
+  - model: 'AAD_Net'
+    train_params:
+      batch_size: 64              
+      max_epoch: 1              
+      lr: 1e-04
+      weight_decay: 1e-04                      
+      early_stopping_patience: 3
+      scheduler_patience: 1
+      shuffle: True
+    dataset_params:
+      window: 320  
+      hop: 32                  
+      fixed: False      
+      rnd_trials: False   
+      window_pred: True
+      stim_input: True
+    loss_params:
+      mode: 'stim_prob'
+    model_params:
+      dropout: 0.4
+      out_dim: 1
