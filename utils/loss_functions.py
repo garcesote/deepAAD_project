@@ -165,6 +165,16 @@ class CustomLoss(nn.Module):
             loss = F.binary_cross_entropy(preds, targets) # [:, 0] as only one label and pred is needed
             return [loss]
         
+        elif self.mode == 'triplet_loss':
+            # Preds must contain anchor, positive and negative embeddings (eeg, stim1, stim2)
+            emb_eeg, emb_stim1, emb_stim2 = preds
+            targets = targets.squeeze()
+            # Discern the attended and the unattended stim by looking at the targets (labels that contain which one is the attended)
+            emb_stima = torch.cat((emb_stim1[targets == 1], emb_stim2[targets == 0]), dim=0)
+            emb_stimb = torch.cat((emb_stim1[targets == 0], emb_stim2[targets == 1]), dim=0)
+            loss = F.triplet_margin_loss(emb_eeg, emb_stima, emb_stimb)
+            return [loss]
+        
         else:
             raise ValueError('Introduce a valid loss')
 

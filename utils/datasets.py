@@ -130,10 +130,7 @@ class CustomDataset(Dataset):
         # STIM INPUT
         if stim_input:
 
-            # Generate the corresponding labels
-            # labels_a = torch.cat((torch.ones_like(self.stima), torch.zeros_like(self.stima)), dim=1)
-            # labels_b = torch.cat((torch.zeros_like(self.stima), torch.ones_like(self.stima)), dim=1)
-            # self.labels = torch.cat((labels_a, labels_b), dim=0)
+            # Generate the corresponding labels (1 attended 0 non attended)
             self.labels = torch.cat((torch.ones_like(self.stima), torch.zeros_like(self.stima)), dim=1)
 
             # Duplicate the data with different stim order

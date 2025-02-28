@@ -10,6 +10,7 @@ from models.vlaai import VLAAI, VLAAI_old
 from models.vlaai_pytorch import VLAAI as VLAAI_pytorch
 from models.eeg_conformer import Conformer, ConformerConfig
 from models.add_net import AAD_Net, AAD_Net_Config
+from models.triplet_net import Triplet_Net, Triplet_Net_Config
 
 # turn a tensor to 0 mean and std of 1 with shape (C, T) and return shape (C)   
 def normalize_eeg(tensor: torch.tensor):
@@ -278,6 +279,19 @@ def load_model(config_run, dataset, wandb_upload):
             mdl_config.stim_pool = getattr(wandb.config, 'stim_pool', mdl_config.stim_pool)
 
         mdl = AAD_Net(mdl_config)
+
+    elif config_run['model'] == 'Triplet_Net':
+
+        mdl_config = config_run['model_params'].copy()
+        mdl_config['eeg_chan'] = get_channels(dataset)
+
+        mdl_config = Triplet_Net_Config(**mdl_config)
+
+        if wandb_upload:
+            # Sweep params implemented
+            mdl_config.eeg_ks = getattr(wandb.config, 'eeg_ks', mdl_config.eeg_ks)
+
+        mdl = Triplet_Net(mdl_config)
 
     else:
         raise ValueError('Introduce a valid model')

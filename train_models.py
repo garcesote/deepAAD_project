@@ -63,6 +63,8 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
 
         # Config loss
         loss_mode = loss_config.get('mode', 'mean')
+        # Exception on val_batch_size on window pred when using triplet loss
+        if loss_mode == 'triplet_loss': val_batch_size = batch_size 
         
         # Saving paths
         mdl_save_path = os.path.join(global_path, 'results', project, key, 'models')
@@ -228,7 +230,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
                             loss = loss_list[0]
 
                             # Decode accuracy
-                            if dataset != 'skl':
+                            if dataset != 'skl' and loss_mode != 'triplet_loss':
                                 # Direct classification based on the predictions
                                 if loss_mode == 'spatial_locus':
                                     probs = F.sigmoid(preds)
@@ -331,7 +333,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/stim_input/aad_net.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/stim_input/triplet_net.yaml", help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--cross_val", action='store_true', help="When included perform a 5 cross validation for the train_set")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
@@ -339,7 +341,7 @@ if __name__ == "__main__":
     parser.add_argument("--sync", action='store_true', help="When included register gradien on wandb")    
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
 

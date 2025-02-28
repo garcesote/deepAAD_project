@@ -29,8 +29,6 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
     window_list = [64, 128, 320, 640, 1600, 3200] # 1s, 2s, 5s, 10s, 25s, 50s
     # window_list = [3200]
     
-    wandb_upload = True
-    
     # REPRODUCIBILITY
     if 'seed' in config.keys(): 
         set_seeds(config['seed'])
