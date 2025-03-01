@@ -37,7 +37,6 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
     preproc_mode = train_config.get('preproc_mode')
     shuffle = train_config.get('shuffle', False)
     val_shuffle = shuffle if ds_config.get('window_pred') else False
-    val_batch_size = 1 if ds_config.get('window_pred') else batch_size
 
     # Config dataset
     ds_config['leave_one_out'] = True if key == 'subj_independent' else False
@@ -67,7 +66,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
         wandb.init(project=project, tags=['sweep'], config=run)
 
         # LOAD THE MODEL
-        mdl = load_model(run, dataset, True)
+        mdl = load_model(run, dataset, True, True)
         mdl.to(device)
         mdl_size = sum(p.numel() for p in mdl.parameters())
 
@@ -79,6 +78,11 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
         batch_size = getattr(wandb.config, 'batch_size', train_config['batch_size'])
         weight_decay = float(getattr(wandb.config, 'weight_decay', train_config.get('weight_decay', 1e-8)))
         
+        # Val batch size
+        val_batch_size = 1 if ds_config.get('window_pred') else batch_size
+        # Exception on val_batch_size on window pred when using triplet loss
+        if loss_mode == 'triplet_loss': val_batch_size = batch_size
+
         # LOAD THE DATA
         data_path = get_data_path(global_data_path, dataset, preproc_mode=preproc_mode)
         train_set = CustomDataset(
@@ -191,7 +195,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
                     loss = loss_list[0]
 
                     # Decode accuracy
-                    if dataset != 'skl':
+                    if dataset != 'skl' and loss_mode != 'triplet_loss':
                         # Direct classification based on the predictions
                         if loss_mode == 'spatial_locus':
                             probs = F.sigmoid(preds)
@@ -272,7 +276,7 @@ def main(config, dataset, key):
 
 if __name__ == "__main__":
 
-    config_path = 'configs/stim_input/aad_net.yaml'
+    config_path = 'configs/stim_input/triplet_net.yaml'
     dataset = 'fulsang'
     key = 'population'
 

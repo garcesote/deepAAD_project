@@ -204,7 +204,7 @@ def compute_ild(left_channel, right_channel):
     ild = 10 * np.log10(rms_left / rms_right)
     return ild
 
-def load_model(config_run, dataset, wandb_upload):
+def load_model(config_run, dataset, wandb_upload, sweep=True):
 
     if config_run['model'] == 'FCNN':
         config_run['model_params']['n_chan'] = get_channels(dataset)
@@ -214,7 +214,7 @@ def load_model(config_run, dataset, wandb_upload):
         
         mdl_config = config_run['model_params'].copy()
 
-        if wandb_upload:
+        if wandb_upload and sweep:
             # Sweep params implemented
             mdl_config['dropout'] = getattr(wandb.config, 'dropout', mdl_config.get('dropout'))
             mdl_config['input_samples'] = getattr(wandb.config, 'input_samples', mdl_config.get('input_samples'))
@@ -246,7 +246,7 @@ def load_model(config_run, dataset, wandb_upload):
 
         mdl_config = ConformerConfig(**mdl_config)
         
-        if wandb_upload:
+        if wandb_upload and sweep:
             # Sweep params implemented
             mdl_config.dropout = getattr(wandb.config, 'dropout', mdl_config.dropout)
             mdl_config.dropout_clsf = getattr(wandb.config, 'dropout_clsf', mdl_config.dropout_clsf)
@@ -265,7 +265,7 @@ def load_model(config_run, dataset, wandb_upload):
 
         mdl_config = AAD_Net_Config(**mdl_config)
 
-        if wandb_upload:
+        if wandb_upload and sweep:
             # Sweep params implemented
             mdl_config.eeg_transform = getattr(wandb.config, 'eeg_transform', mdl_config.eeg_transform)
             mdl_config.eeg_out_feat = getattr(wandb.config, 'eeg_out_feat', mdl_config.eeg_out_feat)
@@ -287,9 +287,19 @@ def load_model(config_run, dataset, wandb_upload):
 
         mdl_config = Triplet_Net_Config(**mdl_config)
 
-        if wandb_upload:
+        if wandb_upload and sweep:
+            
             # Sweep params implemented
+            mdl_config.n_emb = getattr(wandb.config, 'n_emb', mdl_config.n_emb)
+            mdl_config.margin = getattr(wandb.config, 'margin', mdl_config.margin)
             mdl_config.eeg_ks = getattr(wandb.config, 'eeg_ks', mdl_config.eeg_ks)
+            mdl_config.stim_conv_ks = getattr(wandb.config, 'stim_conv_ks', mdl_config.stim_conv_ks)
+            mdl_config.skip = getattr(wandb.config, 'skip', mdl_config.skip)
+            
+            # Si stim_architecture existe en wandb.config, extrae los valores específicos
+            if hasattr(wandb.config, 'stim_architecture'):
+                mdl_config.stim_features = wandb.config.stim_architecture['features']
+                mdl_config.stim_pool = wandb.config.stim_architecture['pool']            
 
         mdl = Triplet_Net(mdl_config)
 

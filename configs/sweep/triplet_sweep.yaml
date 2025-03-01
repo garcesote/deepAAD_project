@@ -1,0 +1,32 @@
+program: sweep_models.py
+project: stim_input
+method: bayes  # random, grid, bayes
+metric:
+  name: val_loss  # Monitored metric
+  goal: minimize  # Maximize or minimize the metric
+parameters:
+  batch_size:
+    values: [8, 64, 256]
+  weight_decay:
+    values: [1e-3, 1e-5]
+  n_emb: 
+    values: [64, 128, 256]
+  margin:
+    values: [0.3, 1]
+  stim_architecture:
+    values: [
+      {features: [16, 32], pool: [4, 2]},
+      {features: [16, 32, 64], pool: [4, 4, 2]}
+    ]
+  eeg_ks: 
+    values: [3, 9]
+  stim_conv_ks:
+    values: [3, 5]
+  skip:
+    values: [True, False]
+command:
+  - ${env}
+  # - C:/Users/garce/AAD_Enviroment/Scripts/python.exe
+  - C:/Users/jaulab/SSS_Enviroment/Scripts/python.exe
+  - ${program}
+  - ${args}

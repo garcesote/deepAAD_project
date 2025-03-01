@@ -1,0 +1,35 @@
+global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
+# global_data_path: 'D:\igarcia\AAD_Data'
+# global_path: 'C:/Users/garce/Desktop/proyecto_2024/deepAAD_project'
+# global_data_path: 'C:/Users/garce/Desktop/proyecto_2024/Data'
+
+exp_name: 'Triplet_Net'
+
+runs: # All models trained with window size of 5s
+
+  - model: 'Triplet_Net'
+    train_params:
+      batch_size: 32              
+      max_epoch: 200              
+      lr: 5e-03
+      weight_decay: 1e-04                      
+      early_stopping_patience: 20
+      scheduler_patience: 10
+      shuffle: True
+    dataset_params:
+      window: 320  
+      hop: 32                 
+      fixed: False      
+      rnd_trials: False   
+      window_pred: True
+      stim_input: True
+    loss_params:
+      mode: 'triplet_loss'
+    model_params:
+      n_emb: 128
+      margin: 0.3
+      stim_conv_ks: 3
+      stim_features: [16, 32]
+      stim_pool: [4, 2]

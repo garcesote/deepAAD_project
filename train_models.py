@@ -81,7 +81,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
             n_folds = 5
         else:
             n_folds = 1
-        
+
         for cv_fold in range(n_folds):
             
             if not cross_val: cv_fold = None
@@ -92,7 +92,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
                 verbose('train', key, subj, dataset, model, loss_mode=loss_mode, cv_fold=cv_fold)
 
                 # LOAD THE MODEL
-                mdl = load_model(run, dataset, wandb_upload)
+                mdl = load_model(run, dataset, wandb_upload, sweep=False)
                 mdl.to(device)
                 mdl_size = sum(p.numel() for p in mdl.parameters())
                 print(f'Model size: {mdl_size / 1e06:.2f}M')
@@ -341,7 +341,7 @@ if __name__ == "__main__":
     parser.add_argument("--sync", action='store_true', help="When included register gradien on wandb")    
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
 
