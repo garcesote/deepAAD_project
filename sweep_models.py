@@ -165,7 +165,6 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
                 # Update the state of the train loss 
                 train_loader_tqdm.set_postfix({'train_loss': loss.item()})
 
-
             mdl.eval()
             val_loss = []
             val_att_corr = 0

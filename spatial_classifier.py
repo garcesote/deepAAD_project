@@ -4,13 +4,9 @@ import os
 import sys
 import yaml
 import wandb
-import json
 import argparse
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import classification_report, confusion_matrix
 from tqdm import tqdm
 import numpy as np
 

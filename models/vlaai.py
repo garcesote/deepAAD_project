@@ -235,7 +235,7 @@ class Linear_Perm(nn.Module):
         # x = x.permute(0, 2, 1).contiguous() # (B, T, C) => (B, C, T)
 
         return x
-    
+
 class VLAAI(nn.Module):
 
     """Construct the VLAAI model.
@@ -266,58 +266,6 @@ class VLAAI(nn.Module):
     x: shape (batch, output_dim, samples)
     
     """
-
-    def __init__(self,
-        n_blocks = 4,
-        stack_model=None,
-        output_context_model=None,
-        use_skip = True,
-        window_pred = False,
-        input_channels = 64,
-        output_dim = 1,
-        dropout = 0.2
-    ) -> None:
-        
-        super().__init__()
-
-        self.use_skip = use_skip
-        self.n_blocks = n_blocks
-
-        self.window_pred = window_pred
-
-        self.blocks = nn.ModuleList(
-            [
-                nn.Sequential(
-                    CNN_stack(input_channels=input_channels, d=dropout),
-                    Linear_Perm(128, input_channels, d=dropout),
-                    Out_Ctx_Layer(input_channels=input_channels, n_filters = input_channels, d=dropout)
-                )
-                for _ in range(n_blocks)
-            ]
-        )
-
-        self.out_linear = Linear_Perm(input_channels, output_dim, d=0)
-
-    def forward(self, x, targets=None):
-
-        # Copy the input for the skip connection
-        if self.use_skip:
-            eeg = torch.clone(x)
-
-        for block in self.blocks:
-
-            x = block(x)
-
-            # Skip connection
-            if self.use_skip:
-                x = x + eeg 
-
-        preds = self.out_linear(x)
-        preds = torch.squeeze(preds, dim=1)
-    
-        return preds
-
-class VLAAI_old(nn.Module):
     
     def __init__(self,
         n_blocks = 4,
@@ -367,7 +315,7 @@ class VLAAI_old(nn.Module):
 
             # Skip connection
             if self.use_skip:
-                x += eeg 
+                x = x + eeg 
 
         preds = self.out_linear(x)
         preds = torch.squeeze(preds, dim=1)

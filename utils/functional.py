@@ -6,7 +6,7 @@ import wandb
 import random
 
 from models.dnn import FCNN, CNN
-from models.vlaai import VLAAI, VLAAI_old
+from models.vlaai import VLAAI
 from models.vlaai_pytorch import VLAAI as VLAAI_pytorch
 from models.eeg_conformer import Conformer, ConformerConfig
 from models.add_net import AAD_Net, AAD_Net_Config
@@ -192,6 +192,7 @@ def get_mdl_name(config, linear = False):
     if dataset_config.get('fixed'): mdl_name = add_appendix(mdl_name, 'fixed')
     if dataset_config.get('rnd_trials'): mdl_name = add_appendix(mdl_name, 'rnd_trials')
     if train_config.get('shuffle'): mdl_name = add_appendix(mdl_name, 'shuffle')
+    if train_config.get('path_dataset'): mdl_name = add_appendix(mdl_name, 'path_dataset')
 
     return mdl_name
 
@@ -229,10 +230,6 @@ def load_model(config_run, dataset, wandb_upload, sweep=True):
     elif config_run['model'] == 'VLAAI':
         config_run['model_params']['input_channels'] = get_channels(dataset)
         mdl = VLAAI(**config_run['model_params'])
-
-    elif config_run['model'] == 'VLAAI_old':
-        config_run['model_params']['input_channels'] = get_channels(dataset)
-        mdl = VLAAI_old(**config_run['model_params'])
 
     elif config_run['model'] == 'VLAAI_pytorch':
         config_run['model_params']['input_channels'] = get_channels(dataset)
@@ -288,7 +285,7 @@ def load_model(config_run, dataset, wandb_upload, sweep=True):
         mdl_config = Triplet_Net_Config(**mdl_config)
 
         if wandb_upload and sweep:
-            
+
             # Sweep params implemented
             mdl_config.n_emb = getattr(wandb.config, 'n_emb', mdl_config.n_emb)
             mdl_config.margin = getattr(wandb.config, 'margin', mdl_config.margin)
@@ -357,7 +354,7 @@ def get_channels(dataset:str):
 def get_subjects(dataset:str):
     subjects = {
         'fulsang': ['S'+str(n) for n in range(1, 19)],
-        'skl': ['S'+str(n) for n in range(1, 85)],
+        'skl': ['S'+str(n) for n in range(1, 86)],
         # 'jaulab' : ['S'+str(n) for n in range(1, 18) if n not in jaulab_excl_subj]
         'jaulab' : ['S'+str(n) for n in range(1, 18)]
     }

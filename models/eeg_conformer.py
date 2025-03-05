@@ -185,8 +185,7 @@ class ClassificationHead(nn.Sequential):
                 nn.Linear(config.hidden_size, self.output_dim)
             )
         else:
-            self.fc = nn.Linear(self.input_size, 1)
-
+            self.fc = nn.Linear(self.input_size, self.output_dim)
 
     def forward(self, x):
         x = x.contiguous().view(x.size(0), -1) # flatten the embed and temp dim

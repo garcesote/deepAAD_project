@@ -1,0 +1,118 @@
+global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
+# global_data_path: 'D:\igarcia\AAD_Data'
+# global_path: 'C:/Users/garce/Desktop/proyecto_2024/deepAAD_project'
+# global_data_path: 'C:/Users/garce/Desktop/proyecto_2024/Data'
+
+exp_name: 'VLAAI_path_ds'
+
+runs:
+
+  - model: 'VLAAI'
+    train_params:
+      batch_size: 64              
+      max_epoch: 500              
+      lr: 0.01
+      weight_decay: 1e-08                   
+      early_stopping_patience: 100
+      scheduler_patience: 50
+      shuffle: True
+      path_dataset: True
+      val_step: 10
+      num_workers: 10
+    dataset_params:
+      window: 320  
+      hop: 32  
+      transform: 'normalize'              
+    model_params:
+      n_blocks: 4
+      use_skip: True
+      output_dim: 1 # chan
+      dropout: 0.4
+    loss_params:
+      mode: 'mean'
+
+  - model: 'CNN'
+    train_params:
+      batch_size: 64              
+      max_epoch: 500              
+      lr: 0.01
+      weight_decay: 1e-08                      
+      early_stopping_patience: 100
+      scheduler_patience: 50
+      shuffle: True
+      path_dataset: True
+      val_step: 10
+      num_workers: 10
+    dataset_params:
+      window: 320  
+      hop: 32                 
+      transform: 'normalize'
+    loss_params:
+      mode: 'mean'
+    model_params:
+      F1: 8
+      D: 8
+      AP1: 2
+      AP2: 4
+      dropout: 0.2
+      input_samples: 320
+      output_dim: 320
+
+  - model: 'Conformer'
+    train_params:
+      batch_size: 64              
+      max_epoch: 500              
+      lr: 0.01
+      weight_decay: 1e-08                      
+      early_stopping_patience: 100
+      scheduler_patience: 50
+      shuffle: True
+      path_dataset: True
+      val_step: 10
+      num_workers: 10
+    dataset_params:
+      window: 320  
+      hop: 32                 
+      transform: 'normalize'
+    loss_params:
+      mode: 'mean'
+    model_params:
+      mlp_ratio: 2
+      enc_layers: 2
+      n_head: 4
+      n_embd: 32
+      kernel_temp: 8
+      pool: 10
+      pool_hop: 2
+      block_size: 320 # 5s
+      output_dim: 320
+      hidden_size: 16
+      dropout: 0.4
+      dropout_clsf: 0.5
+      classifier: False
+      bias: True
+
+  - model: 'VLAAI_pytorch'
+    train_params:
+      batch_size: 64              
+      max_epoch: 500              
+      lr: 0.01
+      weight_decay: 1e-08                   
+      early_stopping_patience: 100
+      scheduler_patience: 50
+      shuffle: True
+      path_dataset: True
+      val_step: 10
+      num_workers: 10
+    dataset_params:
+      window: 320  
+      hop: 32  
+      transform: 'normalize'   
+    model_params:
+      n_blocks: 4
+      use_skip: True
+      output_dim: 320
+    loss_params:
+      mode: 'mean'

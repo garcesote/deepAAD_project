@@ -396,3 +396,101 @@ class CustomDataset(Dataset):
                 return {'eeg':eeg, 'stima':stima, 'stimb':stimb}
         else:
             return {'eeg':eeg, 'stima':stima}
+
+class CustomPathDataset(Dataset):
+
+    def __init__(self, dataset, data_path, split, subjects, transform, window, hop, leave_one_out):
+
+        if dataset not in ['skl']:
+            raise ValueError(f'Dataset {dataset} not supported')
+        if split not in ['train', 'val', 'test', 'train_and_val']:
+            raise ValueError(f'Split {split} not supported')
+        if not isinstance(subjects, list):
+            subjects = [subjects]
+        
+        self.dataset = dataset
+        self.data_path = data_path
+        self.split = split
+        self.transform = transform
+        self.window = window
+        self.hop = hop
+        self.leave_one_out = leave_one_out
+        
+        filelist = os.listdir(self.data_path)
+        self.eeg_paths = []
+
+        if not leave_one_out:
+            self.subjects = subjects
+        else:
+            if split == 'test':
+                self.subjects = subjects
+            else:
+                train_val_subjects = get_other_subjects(subjects, dataset)
+                # Pick randomly 10 subjects from the list for validation set when LOSO val
+                random.seed(42)
+                val_subjects = random.sample(train_val_subjects, 10)
+                if split=='train':
+                    self.subjects = [subj for subj in train_val_subjects if subj not in val_subjects]
+                elif split=='val':
+                    self.subjects = val_subjects
+                
+        # Load all the paths
+        for subj in self.subjects:
+            subj_idx = get_SKL_subj_idx(subj)
+            for n, file in enumerate(filelist):
+                chunks = file.split('_')
+                # Cargo la información del sujeto dependiendo del split
+                if split == chunks[0] and subj_idx == chunks[2]:
+                    if 'eeg' in chunks[-1]:
+                        self.eeg_paths.append(file)
+
+        print(f'Found {len(self.eeg_paths)} paths for {self.split} with subjects {self.subjects}')
+
+    def __len__(self):
+        return len(self.eeg_paths)
+    
+    def __getitem__(self, idx):
+
+        eeg_path = os.path.join(self.data_path, self.eeg_paths[idx])
+        audio_path = os.path.join(self.data_path, self.eeg_paths[idx].replace('eeg.npy', 'envelope.npy'))
+
+        eeg = np.load(eeg_path)
+        try:
+            audio = np.load(audio_path)
+        except:
+            print(f'Could not find envelope for {self.eeg_paths[idx]}')
+            return None
+        
+        if self.transform == 'normalize':
+            # Standarize EEG and envelope on channel dimension
+            eeg = (eeg - np.mean(eeg, axis=0, keepdims=True)) / np.std(eeg, axis=0, keepdims=True)
+            audio = (audio - np.mean(audio, axis=0, keepdims=True)) / np.std(audio, axis=0, keepdims=True)
+
+        windowed_eeg = self.window_data(eeg)
+        windowed_envelope = self.window_data(audio)
+
+        # Select n random windows with n=batch_size
+        random_idx = np.random.randint(0, windowed_eeg.shape[0], 1)
+        windowed_eeg = windowed_eeg[random_idx]
+        windowed_envelope  = windowed_envelope[random_idx]
+
+        windowed_eeg = torch.from_numpy(windowed_eeg).float().transpose(1, 2).squeeze(0)
+        windowed_envelope = torch.from_numpy(windowed_envelope).float().transpose(1, 2).squeeze()
+
+        return {'eeg':windowed_eeg, 'stima':windowed_envelope}
+    
+    def window_data(self, data):
+
+        len_data = data.shape[0]
+        n_channels = data.shape[1]
+        n_windows = (len_data - self.window) // self.hop
+
+        windowed_data = np.empty((n_windows, self.window, n_channels))
+        for idx in range(n_windows):
+
+            start = idx * self.hop
+            end = start + self.window
+
+            windowed_data[idx] = data[start:end, :]
+
+        return windowed_data
