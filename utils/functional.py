@@ -228,7 +228,21 @@ def load_model(config_run, dataset, wandb_upload, sweep=True):
         mdl = CNN(**mdl_config)
 
     elif config_run['model'] == 'VLAAI':
-        config_run['model_params']['input_channels'] = get_channels(dataset)
+        
+        mdl_config = config_run['model_params'].copy()
+
+        mdl_config['input_channels'] = get_channels(dataset)
+        
+        if wandb_upload and sweep:
+            # Sweep params implemented
+            mdl_config['n_blocks'] = getattr(wandb.config, 'n_blocks', mdl_config.get('n_blocks'))
+            mdl_config['use_skip'] = getattr(wandb.config, 'use_skip', mdl_config.get('use_skip'))
+            mdl_config['dropout'] = getattr(wandb.config, 'dropout', mdl_config.get('dropout'))
+            mdl_config['output_context_kernel'] = getattr(wandb.config, 'output_context_kernel', mdl_config.get('output_context_kernel'))
+            mdl_config['output_context_nfilters'] = getattr(wandb.config, 'output_context_nfilters', mdl_config.get('output_context_nfilters'))
+            mdl_config['stack_model_kernel'] = getattr(wandb.config, 'stack_model_kernel', mdl_config.get('stack_model_kernel'))
+            mdl_config['stack_model_filters'] = getattr(wandb.config, 'stack_model_filters', mdl_config.get('stack_model_filters'))
+        
         mdl = VLAAI(**config_run['model_params'])
 
     elif config_run['model'] == 'VLAAI_pytorch':

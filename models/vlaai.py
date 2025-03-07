@@ -86,7 +86,7 @@ class CNN_stack(nn.Module):
     Params
     --------
 
-    filters: int
+    filters: list
         number of filters for each layer
 
     kernel: int
@@ -108,8 +108,8 @@ class CNN_stack(nn.Module):
     """
     
     def __init__(self,
-            filters = (256, 256, 256, 128, 128),
-            kernels = (8,) * 5,
+            filters = [256, 256, 256, 128, 128],
+            kernel = 8,
             input_channels = 64,
             name = 'stack',
             d = 0.2
@@ -117,28 +117,23 @@ class CNN_stack(nn.Module):
 
         super().__init__()
 
-        self.kernels = kernels
+        self.kernel = kernel
         self.filters = filters
         self.input_channels = input_channels
         self.name = name
 
-        # First layer with EEG channels as input and the rest of the layers depends on filter size
-        self.stack = nn.ModuleList(
-            [   CNN_layer(
-                    n_filters= filters[0],
-                    kernel = kernels[0],
-                    input_channels= input_channels,
-                    d = d
-                )
-            ] +
-            [
+        input_dim = [input_channels] + filters[:-1]
+
+        # First layer with EEG channels as input and the rest of the layers 
+        # depends on filter size
+        self.stack = nn.ModuleList([
                 CNN_layer(
                     n_filters= output,
                     kernel = kernel,
                     input_channels= input,
                     d = d
                 )
-                for input, output, kernel in zip(filters[:-1], filters[1:], kernels[1:])
+                for input, output in zip(input_dim, filters)
             ]
         )
 
@@ -269,8 +264,10 @@ class VLAAI(nn.Module):
     
     def __init__(self,
         n_blocks = 4,
-        stack_model=None,
-        output_context_model=None,
+        stack_model_filters=[256, 256, 256, 128, 128],
+        stack_model_kernel = 8,
+        output_context_kernel=32,
+        output_context_nfilters=64,
         use_skip = True,
         input_channels = 64,
         output_dim = 1,
@@ -282,15 +279,11 @@ class VLAAI(nn.Module):
         self.use_skip = use_skip
         self.n_blocks = n_blocks
 
-        if stack_model is None:
-            stack_model = CNN_stack(input_channels=input_channels, d=dropout)
-        if output_context_model is None:
-            output_context_model = Out_Ctx_Layer(input_channels=input_channels, n_filters = input_channels, d=dropout)
+        self.stack_model = CNN_stack(input_channels=input_channels, d=dropout, filters=stack_model_filters, kernel=stack_model_kernel)
+        self.output_context_model = Out_Ctx_Layer(input_channels=input_channels, n_filters = input_channels, d=dropout, kernel=output_context_kernel)
         
-        self.stack_model = stack_model
-        self.output_context_model = output_context_model
-        self.linear = Linear_Perm(stack_model.filters[-1], input_channels, d=dropout)
-        self.out_linear = Linear_Perm(output_context_model.n_filters, output_dim, d=0)
+        self.linear = Linear_Perm(stack_model_filters[-1], input_channels, d=dropout)
+        self.out_linear = Linear_Perm(output_context_nfilters, output_dim, d=0)
 
         self.blocks = nn.ModuleList(
             [
@@ -303,7 +296,7 @@ class VLAAI(nn.Module):
             ]
         )
 
-    def forward(self, x, targets=None):
+    def forward(self, x):
 
         # Copy the input for the skip connection
         if self.use_skip:
@@ -315,7 +308,7 @@ class VLAAI(nn.Module):
 
             # Skip connection
             if self.use_skip:
-                x = x + eeg 
+                x += eeg 
 
         preds = self.out_linear(x)
         preds = torch.squeeze(preds, dim=1)

@@ -293,5 +293,3 @@ class Conformer(nn.Sequential):
             param.requires_grad=False
         for param in self.encoder.parameters():
             param.requires_grad = False
-
-        

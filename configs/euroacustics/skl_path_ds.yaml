@@ -13,8 +13,8 @@ runs:
     train_params:
       batch_size: 64              
       max_epoch: 500              
-      lr: 0.01
-      weight_decay: 1e-08                   
+      lr: 3e-05
+      weight_decay: 1e-04                   
       early_stopping_patience: 100
       scheduler_patience: 50
       shuffle: True
@@ -37,7 +37,7 @@ runs:
     train_params:
       batch_size: 64              
       max_epoch: 500              
-      lr: 0.01
+      lr: 3e-05
       weight_decay: 1e-08                      
       early_stopping_patience: 100
       scheduler_patience: 50
@@ -64,7 +64,7 @@ runs:
     train_params:
       batch_size: 64              
       max_epoch: 500              
-      lr: 0.01
+      lr: 3e-05
       weight_decay: 1e-08                      
       early_stopping_patience: 100
       scheduler_patience: 50
@@ -98,7 +98,7 @@ runs:
     train_params:
       batch_size: 64              
       max_epoch: 500              
-      lr: 0.01
+      lr: 3e-05
       weight_decay: 1e-08                   
       early_stopping_patience: 100
       scheduler_patience: 50
@@ -113,6 +113,6 @@ runs:
     model_params:
       n_blocks: 4
       use_skip: True
-      output_dim: 320
+      output_dim: 1
     loss_params:
       mode: 'mean'

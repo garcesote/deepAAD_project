@@ -1,0 +1,27 @@
+program: sweep_models.py
+project: stim_input
+method: random  # random, grid, bayes
+metric:
+  name: val_loss  # Monitored metric
+  goal: minimize  # Maximize or minimize the metric
+parameters:
+  n_blocks: 
+    values: [2, 4]
+  stack_model_filters:
+    values: [[256,256,256,128,128],[256,256,128],[64,64,64,32,32],[64,64,32]]
+  stack_model_kernel:
+    values: [3, 8]
+  output_context_kernel: 
+    values: [32, 16]
+  output_context_nfilters: 
+    values: [64, 16]
+  dropout:
+    values: [0, 0.4]
+  skip:
+    values: [True, False]   
+command:
+  - ${env}
+  # - C:/Users/garce/AAD_Enviroment/Scripts/python.exe
+  - C:/Users/jaulab/SSS_Enviroment/Scripts/python.exe
+  - ${program}
+  - ${args}

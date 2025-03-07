@@ -258,7 +258,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
 def main(config, dataset, key):
 
     global_data_path = config['global_data_path']
-    project = 'stim_input'
+    project = 'euroacustics'
     config['dataset'] = dataset
     config['key'] = key
     cross_val = None
@@ -275,7 +275,7 @@ def main(config, dataset, key):
 
 if __name__ == "__main__":
 
-    config_path = 'configs/stim_input/triplet_net.yaml'
+    config_path = 'configs/euroacustics/vlaai.yaml'
     dataset = 'fulsang'
     key = 'population'
 
