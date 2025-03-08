@@ -6,15 +6,21 @@ from dataclasses import dataclass, field
 
 class Inception_Block(nn.Module):
 
-    def __init__(self, input_channels:int = 64, out_transform:int = 32, out_feat:int = 8, feature_proj:list = [16,8,4,2], feature_kernel:list = [19,25,33,39], pool:int = 3):
+    def __init__(self, input_channels:int = 64, out_transform:int = 32, out_feat:int = 8, 
+                 feature_proj:list = [16,8,4,2], feature_kernel:list = [19,25,33,39], 
+                 pool:int = 3, padding='same'):
 
         super().__init__()
 
         assert len(feature_kernel) == len(feature_proj), "The list containing the kernels and channels of the features must be of the same size"
+        assert padding in ['same', 'causal', 'anti-causal'], "Passing mus be a valid value between 'same', 'causal' or 'anti-causal'"
         self.n_feat = len(feature_proj)
         self.out_feat = out_feat
         self.input_channels = input_channels
         self.pool = pool
+        self.padding = padding
+        self.feature_proj = feature_proj
+        self.feature_kernel = feature_kernel
 
         # Output channels obtained after concatenate all the outputs of each branch
         if pool:
@@ -29,9 +35,13 @@ class Inception_Block(nn.Module):
         self.chan_compressor = nn.ModuleList([
             nn.Conv1d(input_channels, chan, kernel_size=1)
         for chan in feature_proj])
-        # And an other list containing the conv modules that implement the kernel to learn temporal features
+
+        # Fix the padding for temporal convolution
+        pad_conv = 'same' if self.padding == 'same' else 0
+
+        # And another list containing the conv modules that implement the kernel to learn temporal features
         self.feat_extractor = nn.ModuleList([
-            nn.Conv1d(chan, out_feat, kernel_size=kernel, padding='same')
+                nn.Conv1d(chan, out_feat, kernel_size=kernel, padding=pad_conv)
         for kernel, chan in zip(feature_kernel, feature_proj)])
 
         # Branch containing the pooling operation
@@ -57,9 +67,15 @@ class Inception_Block(nn.Module):
 
         # Feature branches
         x_feat = []
-        for n in range(self.n_feat):
+        for n, kernel in enumerate(self.feature_kernel):
             # Channel compression
             x_n = self.chan_compressor[n](x_norm) # (B, C, T) => (B, feature_proj[n], T)
+            # Apply the padding if 'causal' or 'anti-causal' padding mode selected
+            if self.padding == 'causal':
+                x_n = F.pad(x_n, (0, kernel-1))
+            elif self.padding == 'anti-causal':
+                x_n = F.pad(x_n, (kernel-1, 0))
+            # Apply the convolution operation to extract the temporal features
             x_n = self.feat_extractor[n](x_n) # (B, feature_proj[n], T) => (B, out_feat, T)
             x_feat.append(x_n)
 
@@ -106,6 +122,7 @@ class AAD_Net_Config:
     eeg_feat_proj:list = field(default_factory=lambda: [16, 8, 4, 2])
     eeg_feat_kernel:list = field(default_factory=lambda: [19, 25, 33, 39])
     eeg_pool:int = 3
+    eeg_pad:str ='same'
 
     # Stim Inception Block
     stim_chan:int = 1
@@ -114,6 +131,7 @@ class AAD_Net_Config:
     stim_feat_proj:list = field(default_factory=lambda: [1, 1])
     stim_feat_kernel:list = field(default_factory=lambda: [65, 81])
     stim_pool:int = None
+    stim_pad:str = 'same'
 
     # Classifier
     out_dim:int = 1
@@ -126,9 +144,13 @@ class AAD_Net(nn.Module):
 
         super().__init__()
 
-        self.eeg_inception = Inception_Block(config.eeg_chan, config.eeg_transform, config.eeg_out_feat, config.eeg_feat_proj, config.eeg_feat_kernel, config.eeg_pool)
+        self.eeg_inception = Inception_Block(config.eeg_chan, config.eeg_transform, config.eeg_out_feat,
+            config.eeg_feat_proj, config.eeg_feat_kernel, config.eeg_pool, config.eeg_pad
+        )
         
-        self.stim_inception = Inception_Block(config.stim_chan, config.stim_transform, config.stim_out_feat, config.stim_feat_proj, config.stim_feat_kernel, config.stim_pool)
+        self.stim_inception = Inception_Block(config.stim_chan, config.stim_transform, config.stim_out_feat, 
+            config.stim_feat_proj, config.stim_feat_kernel, config.stim_pool, config.stim_pad
+        )
 
         self.input_clsf_size = self.eeg_inception.concat_channels * self.stim_inception.concat_channels * 2
         self.classifier = MLP_Classifier(self.input_clsf_size, config.out_dim, config.hidden_size, config.dropout)
