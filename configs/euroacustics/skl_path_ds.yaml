@@ -9,56 +9,56 @@ exp_name: 'VLAAI_path_ds'
 
 runs:
 
-  - model: 'VLAAI'
-    train_params:
-      batch_size: 64              
-      max_epoch: 500              
-      lr: 3e-05
-      weight_decay: 1e-04                   
-      early_stopping_patience: 100
-      scheduler_patience: 50
-      shuffle: True
-      path_dataset: True
-      val_step: 10
-      num_workers: 10
-    dataset_params:
-      window: 320  
-      hop: 32  
-      transform: 'normalize'              
-    model_params:
-      n_blocks: 4
-      use_skip: True
-      output_dim: 1 # chan
-      dropout: 0.4
-    loss_params:
-      mode: 'mean'
+  # - model: 'VLAAI'
+  #   train_params:
+  #     batch_size: 64              
+  #     max_epoch: 500              
+  #     lr: 3e-05
+  #     weight_decay: 1e-04                   
+  #     early_stopping_patience: 100
+  #     scheduler_patience: 50
+  #     shuffle: True
+  #     path_dataset: True
+  #     val_step: 10
+  #     num_workers: 10
+  #   dataset_params:
+  #     window: 320  
+  #     hop: 32  
+  #     transform: 'normalize'              
+  #   model_params:
+  #     n_blocks: 4
+  #     use_skip: True
+  #     output_dim: 1 # chan
+  #     dropout: 0.4
+  #   loss_params:
+  #     mode: 'mean'
 
-  - model: 'CNN'
-    train_params:
-      batch_size: 64              
-      max_epoch: 500              
-      lr: 3e-05
-      weight_decay: 1e-08                      
-      early_stopping_patience: 100
-      scheduler_patience: 50
-      shuffle: True
-      path_dataset: True
-      val_step: 10
-      num_workers: 10
-    dataset_params:
-      window: 320  
-      hop: 32                 
-      transform: 'normalize'
-    loss_params:
-      mode: 'mean'
-    model_params:
-      F1: 8
-      D: 8
-      AP1: 2
-      AP2: 4
-      dropout: 0.2
-      input_samples: 320
-      output_dim: 320
+  # - model: 'CNN'
+  #   train_params:
+  #     batch_size: 64              
+  #     max_epoch: 500              
+  #     lr: 3e-05
+  #     weight_decay: 1e-08                      
+  #     early_stopping_patience: 100
+  #     scheduler_patience: 50
+  #     shuffle: True
+  #     path_dataset: True
+  #     val_step: 10
+  #     num_workers: 10
+  #   dataset_params:
+  #     window: 320  
+  #     hop: 32                 
+  #     transform: 'normalize'
+  #   loss_params:
+  #     mode: 'mean'
+  #   model_params:
+  #     F1: 8
+  #     D: 8
+  #     AP1: 2
+  #     AP2: 4
+  #     dropout: 0.2
+  #     input_samples: 320
+  #     output_dim: 320
 
   - model: 'Conformer'
     train_params:

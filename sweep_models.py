@@ -1,8 +1,5 @@
-
-import numpy as np
 from tqdm import tqdm
 from utils.loss_functions import CustomLoss
-import argparse
 import yaml
 import wandb
 
@@ -118,7 +115,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
 
         # Early stopping parameters
         best_epoch = 0
-        best_accuracy = 0
+        best_loss = 0
 
         # Training loop
         for epoch in range(max_epoch):
@@ -237,7 +234,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
             else:
                 print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
             
-            wandb_log = {'mdl_size': mdl_size, 'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
+            wandb_log = {'mdl_size': mdl_size, 'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy, 'best_loss': best_loss}
             # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
             if multiple_loss_opt(loss_mode):
                 wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
@@ -249,8 +246,8 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
             wandb.log(wandb_log)
 
             # Save best results
-            if mean_val_loss < best_accuracy or epoch == 0:
-                best_accuracy = mean_val_loss
+            if mean_val_loss < best_loss or epoch == 0:
+                best_loss = mean_val_loss
                 best_epoch = epoch
 
         wandb.finish()
@@ -275,7 +272,7 @@ def main(config, dataset, key):
 
 if __name__ == "__main__":
 
-    config_path = 'configs/euroacustics/vlaai.yaml'
+    config_path = 'configs/euroacustics/conformer.yaml'
     dataset = 'fulsang'
     key = 'population'
 
