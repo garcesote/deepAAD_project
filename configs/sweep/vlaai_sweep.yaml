@@ -1,5 +1,5 @@
 program: sweep_models.py
-project: stim_input
+project: euroacustics
 method: random  # random, grid, bayes
 metric:
   name: val_loss  # Monitored metric

@@ -21,7 +21,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'euroacustics'
+    project = 'stim_input'
     exp_name = config['exp_name']
 
     # REPRODUCIBILITY
@@ -347,14 +347,14 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/euroacustics/skl_path_ds.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/stim_input/aad_net_padding.yaml", help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--cross_val", action='store_true', help="When included perform a 5 cross validation for the train_set")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")
     parser.add_argument("--gradient_tracking", action='store_true', help="When included register gradien on wandb")
     parser.add_argument("--sync", action='store_true', help="When included register gradien on wandb")    
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
-    parser.add_argument("--dataset", type=str, default='skl', help="Dataset")
+    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     
     args = parser.parse_args()
