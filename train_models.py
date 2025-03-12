@@ -21,7 +21,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'stim_input'
+    project = 'euroacustics'
     exp_name = config['exp_name']
 
     # REPRODUCIBILITY
@@ -347,7 +347,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/stim_input/aad_net_padding.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/euroacustics/best_vs_original.yaml", help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--cross_val", action='store_true', help="When included perform a 5 cross validation for the train_set")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")

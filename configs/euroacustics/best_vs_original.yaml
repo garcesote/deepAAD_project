@@ -1,0 +1,124 @@
+# global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+# global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
+# global_data_path: 'D:\igarcia\AAD_Data'
+global_path: 'C:/Users/garce/Desktop/proyecto_2024/deepAAD_project'
+global_data_path: 'C:/Users/garce/Desktop/proyecto_2024/Data'
+
+exp_name: 'Best_vs_Original'
+
+runs:
+
+  - model: 'VLAAI'
+    train_params:
+      batch_size: 64              
+      max_epoch: 200              
+      lr: 1e-05
+      weight_decay: 1e-04                   
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      shuffle: True
+    dataset_params:
+      window: 320  
+      hop: 32                
+      fixed: False      
+      rnd_trials: False   
+      window_pred: True
+    model_params:
+      n_blocks: 4
+      use_skip: True
+      output_dim: 1
+      dropout: 0.4
+    loss_params:
+      mode: 'mean'
+
+  - model: 'VLAAI'
+    train_params:
+      batch_size: 64              
+      max_epoch: 200              
+      lr: 1e-05
+      weight_decay: 1e-04                   
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      shuffle: True
+    dataset_params:
+      window: 320  
+      hop: 32                
+      fixed: False      
+      rnd_trials: False   
+      window_pred: True
+    model_params:
+      n_blocks: 4
+      use_skip: True
+      output_dim: 1
+      dropout: 0
+      output_context_kernel: 16
+      output_context_nfilters: 64
+      stack_model_kernel: 8
+      stack_model_filters: [256,256,128]
+    loss_params:
+      mode: 'mean'
+
+  - model: 'Conformer'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 0                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      shuffle: True
+    dataset_params:
+      window: 50  
+      hop: 1                 
+      fixed: False      
+      rnd_trials: False   
+      window_pred: False
+    loss_params:
+      mode: 'mean'
+    model_params:
+      mlp_ratio: 4
+      enc_layers: 6
+      n_head: 10
+      n_embd: 40
+      kernel_temp: 5
+      pool: 5
+      pool_hop: 3
+      block_size: 50 # < 1s
+      hidden_size: 32
+      dropout: 0.5
+      dropout_clsf: 0.5
+      classifier: True
+      bias: True
+
+  - model: 'Conformer'
+    train_params:
+      batch_size: 128              
+      max_epoch: 200              
+      lr: 1e-06
+      weight_decay: 1e-04                      
+      early_stopping_patience: 5
+      scheduler_patience: 2
+      shuffle: True
+    dataset_params:
+      window: 50  
+      hop: 1                 
+      fixed: False      
+      rnd_trials: False   
+      window_pred: False
+    loss_params:
+      mode: 'mean'
+    model_params:
+      mlp_ratio: 2
+      enc_layers: 2
+      n_head: 4
+      n_embd: 32
+      kernel_temp: 8
+      pool: 5
+      pool_hop: 2
+      block_size: 50 # < 1s
+      hidden_size: 32
+      dropout: 0.4
+      dropout_clsf: 0.4
+      classifier: True
+      bias: True
