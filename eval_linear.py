@@ -44,6 +44,8 @@ def main(config, dataset: str, key: str, cross_val: bool, wandb_upload: bool):
         # Add extensions to the model name depending on the params
         model_name = get_mdl_name(run, linear=True)
 
+        cross_val=True
+
         # Cross validation 
         if cross_val:
             n_folds = 5
@@ -181,7 +183,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Definir los argumentos que quieres aceptar
-    parser.add_argument("--config", type=str, default='configs/euroacustics/linear_models.yaml')
+    parser.add_argument("--config", type=str, default='configs/euroacustics/cca_search.yaml')
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--cross_val", action='store_true', help="When included select the cross validation models")        

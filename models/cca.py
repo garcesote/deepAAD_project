@@ -41,7 +41,8 @@ class CCA_AAD:
         self.n_components = n_components if n_components is not None else min(encoder_len, decoder_len)
 
         self.model = CCA(n_components=n_components, max_iter=max_iter, tol=tol)
-        self.classf = LinearDiscriminantAnalysis()
+        self.classf = None
+        self.best_accuracy = None
 
     def fit_CCA(self, eeg, stim):
 
@@ -58,18 +59,9 @@ class CCA_AAD:
         """
         
         # Generate lag matrices
-        n_chan, n_times = eeg.shape
-        n_stim_chan = stim.shape[0]
-        n_trial = n_times // self.trial_len
-        # lagged_eeg = np.zeros((n_chan*self.decoder_len, n_times))
-        # lagged_stim = np.zeros((n_stim_chan*self.encoder_len, n_times))
-        # for trial in range(n_trial):
-        #     start = trial * self.trial_len
-        #     end = (trial+1) * self.trial_len
-        #     lagged_eeg[:,start:end] = self._get_lagged_matrix(eeg[:,start:end], pre_stim = False)
-        #     lagged_stim[:, start:end] = self._get_lagged_matrix(stim[:,start:end], pre_stim = True)
         lagged_eeg = self._get_lagged_matrix(eeg, pre_stim = False)
         lagged_stim = self._get_lagged_matrix(stim, pre_stim = True)
+        
         # Fit CCA
         self.model.fit(lagged_eeg.T, lagged_stim.T)
 
@@ -150,8 +142,8 @@ class CCA_AAD:
             scores[n, :] = np.array([pearsonr(eeg_proj[j], stim_proj[j])[0] for j in range(self.n_components)])
 
         return scores
-
-    def fit_LDA(self, eeg, stima, stimb, batch_size):
+            
+    def fit_LDA(self, eeg, stima, stimb, eeg_val, stima_val, stimb_val, batch_size):
 
         """ Fit the classifier model using the CCA coefficients
         
@@ -163,6 +155,8 @@ class CCA_AAD:
 
             stimb (array-like or tensor): unattended envelope of shape (n_samples, )
 
+            _val: included to select the best number of components
+
             batch_size (int): lenght of the windowed data
 
         """
@@ -171,17 +165,54 @@ class CCA_AAD:
         scores_a = self.score_in_batches(eeg, stima, batch_size)
         scores_b = self.score_in_batches(eeg, stimb, batch_size)
 
+        # Get the scores
+        scores_a_val = self.score_in_batches(eeg_val, stima_val, batch_size)
+        scores_b_val = self.score_in_batches(eeg_val, stimb_val, batch_size)
+
         # Difference between scores as the function to classify
         # f_att = scores_a - scores_b
         # f_unatt = scores_b - scores_a
-        f_att = scores_a
-        f_unatt = scores_b
 
-        # Concatenate the scores and generate a label array to feed LDA
-        scores = np.vstack((f_att, f_unatt))
-        labels = np.concatenate((np.ones(f_att.shape[0]), np.zeros(f_unatt.shape[0])))
+        accuracies = []
+        best_accuracy = 0
+        best_n_components = 0
+        for n in range(self.n_components):
 
-        self.classf.fit(scores, labels)
+            f_att = scores_a[:, :n+1]
+            f_unatt = scores_b[:, :n+1]
+
+            # Concatenate the scores and generate a label array to feed LDA
+            scores = np.vstack((f_att, f_unatt))
+            labels = np.concatenate((np.ones(f_att.shape[0]), np.zeros(f_unatt.shape[0])))
+
+            # Load and fit a classifier with training data
+            classifier = LinearDiscriminantAnalysis()
+            classifier.fit(scores, labels)
+
+            # Get accuracy for validation set
+            att_correct = 0
+            f_att = scores_a_val[:, :n+1]
+            f_unatt = scores_b_val[:, :n+1]
+            # Transform into a 1D space with LDA
+            f_att = classifier.transform(f_att)
+            f_unatt = classifier.transform(f_unatt)
+            for att, unatt in zip(f_att, f_unatt):
+                if att > unatt: 
+                    att_correct +=1
+            # Compute the accuracy
+            accuracy = (att_correct / len(f_att)) * 100
+            accuracies.append(accuracy)
+
+            # Save the best classifier
+            if accuracy > best_accuracy:
+                self.classf = classifier
+                best_accuracy = accuracy
+                best_n_components = n+1
+
+        # Set the n_components that achieved the best results
+        self.n_components = best_n_components
+        self.best_accuracy = best_accuracy
+
 
     def classify_in_batches(self, eeg, stima, stimb, batch_size):
 

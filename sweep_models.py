@@ -63,7 +63,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
         wandb.init(project=project, tags=['sweep'], config=run)
 
         # LOAD THE MODEL
-        mdl = load_model(run, dataset, True, True)
+        mdl = load_model(run, dataset, wandb_upload=True, sweep=True)
         mdl.to(device)
         mdl_size = sum(p.numel() for p in mdl.parameters())
 

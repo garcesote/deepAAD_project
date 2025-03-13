@@ -97,20 +97,20 @@ def main(config, dataset: str, key: str, cross_val: bool):
                     model_params['trial_len'] = trial_len
                     mdl = CCA_AAD(**model_params)
                     
-                    # TRAIN THE CCA PROJECTION MODEL
+                    # TRAIN THE CCA PROJECTOR MODEL
                     mdl.fit_CCA(eeg=train_set.eeg, stim=train_set.stima)
 
-                    # TRAIN THE LDA CLASSIFIER MODEL
-                    mdl.fit_LDA(eeg=train_set.eeg, stima=train_set.stima, stimb=train_set.stimb, batch_size=trial_len)
+                    # TRAIN THE LDA CLASSIFIER MODEL: val set to select the optimal components that maximize the accuracy
+                    mdl.fit_LDA(eeg=train_set.eeg, stima=train_set.stima, stimb=train_set.stimb, 
+                                eeg_val=val_set.eeg, stima_val=val_set.stima, stimb_val=val_set.stimb, 
+                                batch_size=trial_len//10)
                     
-                    # VALIDATE THE MODEL
-                    scores_a = mdl.score_in_batches(val_set.eeg, val_set.stima, batch_size=trial_len)
-                    scores_b = mdl.score_in_batches(val_set.eeg, val_set.stimb, batch_size=trial_len)
-                    accuracy = mdl.classify_in_batches(val_set.eeg, val_set.stima, val_set.stimb, batch_size=trial_len)
-                    
-                    mdl_filename = f"{mdl_prefix}_score={np.mean(scores_a):.3f}_acc={accuracy:.3f}"
+                    scores_a = mdl.score_in_batches(train_set.eeg, train_set.stima, batch_size=trial_len)
+                    scores_b = mdl.score_in_batches(train_set.eeg, train_set.stimb, batch_size=trial_len)
 
-                    print(f'CCA stats on {dataset} dataset: score_a {np.mean(scores_a)} | score_b {np.mean(scores_b)} | val_accuracy {accuracy}%')
+                    mdl_filename = f"{mdl_prefix}_score={np.mean(scores_a):.3f}_acc={mdl.best_accuracy:.3f}_nComponents={mdl.n_components}"
+
+                    print(f'CCA stats on {dataset} dataset: n_components: {mdl.n_components} | val_accuracy: {mdl.best_accuracy}% | score_a: {np.mean(scores_a)} | score_b: {np.mean(scores_b)} | val_accuracy: {mdl.best_accuracy}%')
 
                 else: raise ValueError('Introduce a valid lineal model between Ridge or CCA')
 
@@ -136,9 +136,9 @@ if __name__ == "__main__":
     # os.environ["VECLIB_MAXIMUM_THREADS"] = "8"  # Para bibliotecas vecLib en macOS
     
     # Definir los argumentos que quieres aceptar
-    parser.add_argument("--config", type=str, default='configs/euroacustics/linear_models.yaml')
+    parser.add_argument("--config", type=str, default='configs/euroacustics/cca_search.yaml')
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--cross_val", action='store_true', help="When included perform a 5 cross validation for the train_set")
     
     args = parser.parse_args()

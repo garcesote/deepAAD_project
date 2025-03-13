@@ -1,0 +1,23 @@
+global_path: 'C:/Users/jaulab/Desktop/deepAAD_project'
+global_data_path: 'C:/Users/jaulab/Desktop/AAD/Data'
+# global_path: 'C:/Users/garcia.127407/Desktop/DNN_AAD/deepAAD_project'
+# global_data_path: 'D:\igarcia\AAD_Data'
+
+exp_name: 'linear_models'
+
+runs:
+
+  - linear_model: 'CCA'
+    model_params:
+      encoder_len: 80
+      decoder_len: 16
+      n_components: 16
+      max_iter: 100
+    train_params:
+      preproc_mode: null
+    dataset_params: # Included but ignored in the code
+      window: 50
+      hop: 1
+      fixed: False
+      rnd_trials: False
+      window_pred: False

@@ -13,8 +13,6 @@ parameters:
     values: [3, 8]
   output_context_kernel: 
     values: [32, 16]
-  output_context_nfilters: 
-    values: [64, 16]
   dropout:
     values: [0, 0.4]
   skip:
