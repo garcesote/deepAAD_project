@@ -21,7 +21,7 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'stim_input'
+    project = 'euroacustics'
     exp_name = config['exp_name']
     
     # REPRODUCIBILITY
@@ -116,7 +116,7 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                 mdl_load_path = os.path.join(mdl_load_path, mdl_filename)
 
                 # LOAD THE MODEL
-                mdl = load_model(run, dataset, wandb_upload)
+                mdl = load_model(run, dataset, wandb_upload, sweep=False)
                 mdl.load_state_dict(torch.load(mdl_load_path, map_location=torch.device(device), weights_only=True))
                 mdl.to(device)
                 mdl.finetune()
@@ -152,8 +152,9 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                 criterion = CustomLoss(window_pred=ds_config.get('window_pred', True), **run['loss_params'])
 
                 # Early stopping parameters
-                best_accuracy=0
-                best_epoch=0
+                best_loss = 0
+                best_accuracy = 0
+                best_epoch = 0
 
                 # Saving metrics lists
                 train_mean_loss = []
@@ -283,9 +284,10 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                         scheduler.step(-mean_val_loss)
 
                         # Save best results
-                        if mean_val_loss < best_accuracy or epoch == 0:
+                        if mean_val_loss < best_loss or epoch == 0:
                             # best_train_loss = mean_train_accuracy
-                            best_accuracy = mean_val_loss
+                            best_loss = mean_val_loss
+                            best_accuracy = val_decAccuracy
                             best_epoch = epoch
                             best_state_dict = mdl.state_dict()
 
@@ -322,7 +324,7 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                     os.makedirs(mdl_folder)
                 torch.save(
                     best_state_dict, 
-                    os.path.join(mdl_folder, f'{prefix}_epoch={epoch}_acc={best_accuracy:.4f}.ckpt')
+                    os.path.join(mdl_folder, f'{prefix}_epoch={best_epoch}_loss={best_loss:.4f}_acc={best_accuracy:.4f}.ckpt')
                 )
                 
                 metrics_folder = os.path.join(metrics_save_path, dataset+'_data', mdl_save_name, subj)
@@ -333,11 +335,13 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
                 train_folder = os.path.join(metrics_folder, 'train')
                 if not os.path.exists(train_folder):
                     os.makedirs(train_folder)
-                json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-                json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-                json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+                json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={best_epoch}_loss={best_loss:.4f}_acc={best_accuracy:.4f}.ckpt'),'w'))
+                json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={best_epoch}_loss={best_loss:.4f}_acc={best_accuracy:.4f}.ckpt'),'w'))
+                json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_acc_epoch={best_epoch}_loss={best_loss:.4f}_acc={best_accuracy:.4f}.ckpt'),'w'))
 
-                if wandb_upload: wandb.finish()
+                if wandb_upload: 
+                    wandb.log({'best_epoch': best_epoch, 'best_loss': best_loss, 'best_acc':best_accuracy})
+                    wandb.finish()
 
 if __name__ == "__main__":
 

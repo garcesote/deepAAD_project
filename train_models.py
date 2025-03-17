@@ -148,6 +148,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
                 criterion = CustomLoss(window_pred=ds_config.get('window_pred', True), **run['loss_params'])
 
                 # Early stopping parameters
+                best_loss = 0
                 best_accuracy=0
                 best_epoch=0
 
@@ -279,9 +280,10 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
                         scheduler.step(-mean_val_loss)
 
                         # Save best results
-                        if mean_val_loss < best_accuracy or epoch == 0:
+                        if mean_val_loss < best_loss or epoch == 0:
                             # best_train_loss = mean_train_accuracy
-                            best_accuracy = mean_val_loss
+                            best_loss = mean_val_loss
+                            best_accuracy = val_decAccuracy
                             best_epoch = epoch
                             best_state_dict = mdl.state_dict()
 
@@ -322,7 +324,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
                         os.makedirs(mdl_folder)
                     torch.save(
                         best_state_dict, 
-                        os.path.join(mdl_folder, f'{prefix}_epoch={epoch}_acc={best_accuracy:.4f}.ckpt')
+                        os.path.join(mdl_folder, f'{prefix}_epoch={best_epoch}_loss={best_loss:.4f}_acc={best_accuracy:.4f}.ckpt')
                     )
 
                     metrics_folder = os.path.join(metrics_save_path, dataset+'_data', mdl_name)
@@ -334,11 +336,13 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
                     train_folder = os.path.join(metrics_folder, 'train')
                     if not os.path.exists(train_folder):
                         os.makedirs(train_folder)
-                    json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-                    json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
-                    json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_decAcc_epoch={epoch}_acc={best_accuracy:.4f}'),'w'))
+                    json.dump(train_mean_loss, open(os.path.join(train_folder, f'{prefix}_train_loss_epoch={best_epoch}_loss={best_loss:.4f}_acc={best_accuracy:.4f}.ckpt'),'w'))
+                    json.dump(val_mean_loss, open(os.path.join(val_folder, f'{prefix}_val_loss_epoch={best_epoch}_loss={best_loss:.4f}_acc={best_accuracy:.4f}.ckpt'),'w'))
+                    json.dump(val_decAccuracies, open(os.path.join(val_folder, f'{prefix}_val_acc_epoch={best_epoch}_loss={best_loss:.4f}_acc={best_accuracy:.4f}.ckpt'),'w'))
 
-                if wandb_upload: wandb.finish()
+                if wandb_upload: 
+                    wandb.log({'best_epoch': best_epoch, 'best_loss': best_loss, 'best_acc':best_accuracy})
+                    wandb.finish()
 
 if __name__ == "__main__":
 
@@ -347,7 +351,7 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default="configs/euroacustics/best_vs_original.yaml", help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default="configs/euroacustics/cnn.yaml", help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--cross_val", action='store_true', help="When included perform a 5 cross validation for the train_set")
     parser.add_argument("--tunning", action='store_true', help="When included do not save results on local folder")

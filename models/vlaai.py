@@ -314,3 +314,12 @@ class VLAAI(nn.Module):
         preds = torch.squeeze(preds, dim=1)
     
         return preds
+    
+    # Freeze embedding and encoder blocks when finetunning
+    def finetune(self):
+        for param in self.stack_model.parameters():
+            param.requires_grad=False
+        for param in self.linear.parameters():
+            param.requires_grad = False
+        for param in self.output_context_model.parameters():
+            param.requires_grad = False

@@ -318,7 +318,7 @@ def load_model(config_run, dataset, wandb_upload, sweep=True):
     
     return mdl
     
-# Returns the filename related to the subject solving the problem of S1
+# Returns the filename
 def get_filename(mdl_folder_path, cv_fold=None):
     
     list_dir = os.listdir(mdl_folder_path)

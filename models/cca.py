@@ -40,7 +40,7 @@ class CCA_AAD:
         self.trial_len = trial_len
         self.n_components = n_components if n_components is not None else min(encoder_len, decoder_len)
 
-        self.model = CCA(n_components=n_components, max_iter=max_iter, tol=tol)
+        self.model = CCA(n_components=n_components, max_iter=max_iter, tol=tol, copy=False)
         self.classf = None
         self.best_accuracy = None
 
@@ -61,9 +61,16 @@ class CCA_AAD:
         # Generate lag matrices
         lagged_eeg = self._get_lagged_matrix(eeg, pre_stim = False)
         lagged_stim = self._get_lagged_matrix(stim, pre_stim = True)
-        
-        # Fit CCA
-        self.model.fit(lagged_eeg.T, lagged_stim.T)
+
+        # Guarda las matrices en disco temporalmente
+        eeg_memmap = np.memmap('temp_eeg.dat', dtype=np.float32, mode='w+', shape=lagged_eeg.shape)
+        eeg_memmap[:] = lagged_eeg[:]
+
+        stim_memmap = np.memmap('temp_stim.dat', dtype=np.float32, mode='w+', shape=lagged_stim.shape)
+        stim_memmap[:] = lagged_stim[:]
+
+        # Trabaja con los memmaps
+        self.model.fit(eeg_memmap.T, stim_memmap.T)
 
     def transform(self, eeg, stim):
 

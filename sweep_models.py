@@ -116,6 +116,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
         # Early stopping parameters
         best_epoch = 0
         best_loss = 0
+        best_accuracy = 0
 
         # Training loop
         for epoch in range(max_epoch):
@@ -234,7 +235,7 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
             else:
                 print(f'Epoch: {epoch} | Train loss: {mean_train_loss:.4f} | Val loss/acc: {mean_val_loss:.4f}/{val_decAccuracy:.4f}')
             
-            wandb_log = {'mdl_size': mdl_size, 'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy, 'best_loss': best_loss}
+            wandb_log = {'mdl_size': mdl_size, 'train_loss': mean_train_loss, 'val_loss': mean_val_loss, 'val_acc': val_decAccuracy}
             # Add isolated metrics for the log when the loss is computed by multiple criterion (correlation + ild)
             if multiple_loss_opt(loss_mode):
                 wandb_log['val_corr'] = torch.mean(torch.hstack([loss_list[1] for loss_list in val_loss])).item()
@@ -248,8 +249,10 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
             # Save best results
             if mean_val_loss < best_loss or epoch == 0:
                 best_loss = mean_val_loss
+                best_accuracy = val_decAccuracy
                 best_epoch = epoch
 
+        wandb.log({'best_epoch': best_epoch, 'best_loss': best_loss, 'best_acc':best_accuracy})
         wandb.finish()
 
 def main(config, dataset, key):

@@ -23,7 +23,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'stim_input'
+    project = 'euroacustics'
     exp_name = config['exp_name']
     # window_list = [64, 128, 320, 640, 1280, 2560] # 1s, 2s, 5s, 10s, 20s, 40s
     window_list = [64, 128, 320, 640, 1600, 3200] # 1s, 2s, 5s, 10s, 25s, 50s

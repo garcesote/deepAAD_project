@@ -117,7 +117,8 @@ def main(config, dataset: str, key: str, cross_val: bool):
                 model_name = get_mdl_name(run, linear=True)
                 
                 # SAVE THE MODEL
-                mdl_folder = os.path.join(mdl_save_path, dataset + '_data', model_name, subj)
+                mdl_folder = os.path.join(mdl_save_path, dataset + '_data', model_name) 
+                if key != 'population': mdl_folder = os.path.join(mdl_folder, subj) # Add subj folder CNN[...]/S1/
                 if not os.path.exists(mdl_folder):
                     os.makedirs(mdl_folder)
                 save_path = os.path.join(mdl_folder, mdl_filename)
