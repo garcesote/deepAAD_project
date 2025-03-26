@@ -87,7 +87,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
 
         # Cross validation 
         if cross_val:
-            n_folds = 5
+            n_folds = 1
         else:
             n_folds = 1
 
@@ -141,7 +141,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
                     run['loss_params']['mode'] = loss_mode
                     
                     # LOAD THE MODEL
-                    mdl = load_model(run, dataset, wandb_upload)
+                    mdl = load_model(run, dataset, wandb_upload, sweep=False)
                     mdl.load_state_dict(torch.load(mdl_load_path, map_location=torch.device(device), weights_only=True))
                     mdl.to(device)
 
@@ -336,10 +336,10 @@ if __name__ == "__main__":
     torch.set_num_threads(n_threads)
     
     # Add config argument
-    parser.add_argument("--config", type=str, default='configs/stim_input/fast_aad_net.yaml', help="Ruta al archivo config")
+    parser.add_argument("--config", type=str, default='configs/euroacustics/best_models.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--key", type=str, default='subj_independent', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--finetuned", action='store_true', help="When included search for the model on the finetune folder")
     parser.add_argument("--cross_val", action='store_true', help="When included select the cross validation models")    
     parser.add_argument("--eval_population", action='store_true', help="When included evaluate by fitting a classifier with both")    
