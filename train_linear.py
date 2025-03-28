@@ -9,11 +9,10 @@ from utils.datasets import CustomDataset
 import argparse
 import yaml
 
-def main(config, dataset: str, key: str, cross_val: bool):
+def main(config, dataset: str, key: str, cross_val: bool, project:str):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'euroacustics'
     mdl_save_path = os.path.join(global_path, 'results', project, key, 'models')
     exp_name = config['exp_name']
 
@@ -44,7 +43,7 @@ def main(config, dataset: str, key: str, cross_val: bool):
 
         # Cross validation 
         if cross_val:
-            n_folds = 5
+            n_folds = 5 if dataset == 'fulsang' else 4
         else:
             n_folds = 1
 
@@ -94,7 +93,6 @@ def main(config, dataset: str, key: str, cross_val: bool):
 
                 elif linear_model == 'CCA':
                     
-                    model_params['trial_len'] = trial_len
                     mdl = CCA_AAD(**model_params)
                     
                     # TRAIN THE CCA PROJECTOR MODEL
@@ -137,9 +135,10 @@ if __name__ == "__main__":
     # os.environ["VECLIB_MAXIMUM_THREADS"] = "8"  # Para bibliotecas vecLib en macOS
     
     # Definir los argumentos que quieres aceptar
-    parser.add_argument("--config", type=str, default='configs/euroacustics/cca_search.yaml')
-    parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--config", type=str, default='configs/dataset_comparison/linear_models.yaml')
+    parser.add_argument("--dataset", type=str, default='jaulab', help="Dataset")
+    parser.add_argument("--project", type=str, default='stim_input', help="Name of the project that must corresponds with wandb project and set the save path for metrics and models")
+    parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--cross_val", action='store_true', help="When included perform a 5 cross validation for the train_set")
     
     args = parser.parse_args()
@@ -149,4 +148,4 @@ if __name__ == "__main__":
         config = yaml.safe_load(archivo)
 
     # Llamar a la función de entrenamiento con los argumentos
-    main(config, args.dataset, args.key, args.cross_val)
+    main(config, args.dataset, args.key, args.cross_val, args.project)

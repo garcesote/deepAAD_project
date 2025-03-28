@@ -19,11 +19,10 @@ import sys
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetuned, spatial_clsf, figures):
+def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetuned, spatial_clsf, figures, project):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'euroacustics'
     exp_name = config['exp_name']
     # window_list = [64, 128, 320, 640, 1280, 2560] # 1s, 2s, 5s, 10s, 20s, 40s
     window_list = [64, 128, 320, 640, 1600, 3200] # 1s, 2s, 5s, 10s, 25s, 50s
@@ -87,7 +86,7 @@ def main(config, wandb_upload, dataset, key, cross_val, eval_population, finetun
 
         # Cross validation 
         if cross_val:
-            n_folds = 1
+            n_folds = 5 if dataset == 'fulsang' else 4
         else:
             n_folds = 1
 
@@ -338,6 +337,7 @@ if __name__ == "__main__":
     # Add config argument
     parser.add_argument("--config", type=str, default='configs/euroacustics/best_models.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
+    parser.add_argument("--project", type=str, default='stim_input', help="Name of the project that must corresponds with wandb project and set the save path for metrics and models")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='subj_independent', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--finetuned", action='store_true', help="When included search for the model on the finetune folder")

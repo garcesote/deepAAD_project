@@ -17,11 +17,10 @@ import wandb
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracking, early_stop):
+def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracking, early_stop, project):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'euroacustics'
     exp_name = config['exp_name']
 
     # REPRODUCIBILITY
@@ -84,7 +83,7 @@ def main(config, wandb_upload, dataset, key, cross_val, tunning, gradient_tracki
 
         # Cross validation 
         if cross_val:
-            n_folds = 5
+            n_folds = 5 if dataset == 'fulsang' else 4
         else:
             n_folds = 1
 
@@ -359,8 +358,9 @@ if __name__ == "__main__":
     parser.add_argument("--sync", action='store_true', help="When included register gradien on wandb")    
     parser.add_argument("--max_epoch", action='store_true', help="When included training performed for all the epoch without stop")
     parser.add_argument("--dataset", type=str, default='jaulab', help="Dataset")
-    parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
-    
+    parser.add_argument("--key", type=str, default='subj_independent', help="Key from subj_specific, subj_independent and population")
+    parser.add_argument("--project", type=str, default='stim_input', help="Name of the project that must corresponds with wandb project and set the save path for metrics and models")
+
     args = parser.parse_args()
 
     wandb_upload = args.wandb
@@ -376,4 +376,4 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, args.key, args.cross_val, args.tunning, args.gradient_tracking, not args.max_epoch)
+    main(config, wandb_upload, args.dataset, args.key, args.cross_val, args.tunning, args.gradient_tracking, not args.max_epoch, args.project)

@@ -10,12 +10,11 @@ import wandb
 import yaml
 import sys
 
-def main(config, dataset: str, key: str, cross_val: bool, wandb_upload: bool):
+def main(config, dataset: str, key: str, cross_val: bool, wandb_upload: bool, project:str):
 
     # Data path parameters
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'euroacustics'
     exp_name = config['exp_name']
 
     # REPRODUCIBILITY
@@ -48,7 +47,7 @@ def main(config, dataset: str, key: str, cross_val: bool, wandb_upload: bool):
 
         # Cross validation 
         if cross_val:
-            n_folds = 5
+            n_folds = 5 if dataset == 'fulsang' else 4
         else:
             n_folds = 1
         
@@ -185,6 +184,7 @@ if __name__ == "__main__":
     # Definir los argumentos que quieres aceptar
     parser.add_argument("--config", type=str, default='configs/euroacustics/cca_search.yaml')
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
+    parser.add_argument("--project", type=str, default='stim_input', help="Name of the project that must corresponds with wandb project and set the save path for metrics and models")
     parser.add_argument("--key", type=str, default='subj_specific', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--cross_val", action='store_true', help="When included select the cross validation models")        
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
@@ -205,4 +205,4 @@ if __name__ == "__main__":
         config = yaml.safe_load(archivo)
     
     # Llamar a la función de entrenamiento con los argumentos
-    main(config, args.dataset, args.key, args.cross_val, wandb_upload)
+    main(config, args.dataset, args.key, args.cross_val, wandb_upload, args.project)

@@ -40,7 +40,10 @@ def get_trials(split: str, n_trials: int, cv_fold: int = None, shuffle: bool = F
             n_trials = len(jaulab_fixed_trials)
             trials = jaulab_fixed_trials
         else:
-            trials = np.arange(0, n_trials)
+            if dataset != 'kuleuven':
+                trials = np.arange(0, n_trials)
+            else: 
+                trials = np.arange(0, 20)
 
         sizes = [int(n_trials * p) for p in partitions]
         sizes[0] = n_trials - sum(sizes[1:]) # Add resting samples to the train set
@@ -57,33 +60,66 @@ def get_trials(split: str, n_trials: int, cv_fold: int = None, shuffle: bool = F
         else:
             indices = np.arange(0, n_trials)
 
-        if split == 'train':
-            return  np.array([trials[idx] for idx in indices[:sizes[0]]])
-        elif split == 'val':
-            return  np.array([trials[idx] for idx in indices[sizes[0]:n_trials-sizes[1]]])
-        elif split == 'test':
-            return  np.array([trials[idx] for idx in indices[n_trials-sizes[1]:n_trials]])
-        elif split == 'all':
-            return  np.array([trials[idx] for idx in indices])
-        else:
-            raise ValueError('Field split must be a train/val/test/all value')
+        if dataset != 'kuleuven':
+            if split == 'train': idx_range = range(sizes[0])
+            elif split == 'val': idx_range = range(sizes[0],n_trials-sizes[1])
+            elif split == 'test': idx_range = range(n_trials-sizes[1],n_trials)
+            elif split == 'all': idx_range = range(n_trials)
+            else: raise ValueError('Field split must be a train/val/test/all value')
 
-    # 5 cross validation fold
+            return np.array([trials[idx] for idx in indices[idx_range]])
+        
+        else: 
+            # KULeuven that needs a mapping for tha last indices to the corresponding trials (3 trials each last idx)
+            idx_to_trials = [n for n in range(8)]
+            for idx in range(8, 12):
+                idx_to_trials.extend([idx for n in range(3)])
+            idx_to_trials = np.array(idx_to_trials)  # [1, 2, ..., 8, 8, 8, ..., 11, 11, 11]
+            if split == 'train': idx_range = range(sizes[0])
+            elif split == 'val': idx_range = range(sizes[0],n_trials-sizes[1])
+            elif split == 'test': idx_range = range(n_trials-sizes[1],n_trials)
+            elif split == 'all': idx_range = range(n_trials)
+            else: raise ValueError('Field split must be a train/val/test/all value')
+            
+            indices_list = np.concatenate([
+                np.where(idx_to_trials == idx)[0] # [0] because where retuns a tuple
+                for idx in indices[idx_range]
+            ])
+            return trials[indices_list]
+
+            
+    # 5-fold cross validation (fulsang) or 4-fold cross validation (kuleuven/jaulab) scheme
     else: 
-        trials_per_fold = n_trials // 5
-        blocks = np.array([np.arange(n * trials_per_fold, (n + 1) * trials_per_fold) for n in range(5)])
-        blocks = np.roll(blocks, cv_fold, axis=0)
 
-        if split == 'train':
-            return np.concatenate(blocks[:3])
-        elif split == 'val':
-            return blocks[3]
-        elif split == 'test':
-            return blocks[4]
-        elif split == 'all':
-            return np.concatenate(blocks)
-        else:
-            raise ValueError('Field split must be a train/val/test/all value')
+        n_folds = 5 if dataset == 'fulsang' else 4
+        trials_per_fold = n_trials // n_folds
+
+        if dataset != 'kuleuven':
+            blocks = [np.arange(n * trials_per_fold, (n + 1) * trials_per_fold) for n in range(n_folds)]
+            
+        
+        else: # trial mapping
+            idx_to_trials = [n for n in range(8)]
+            for idx in range(8, 12):
+                idx_to_trials.extend([idx for n in range(3)])
+            idx_to_trials = np.array(idx_to_trials)  # [1, 2, ..., 8, 8, 8, ..., 11, 11, 11]
+            blocks = []
+            for n in range(n_folds):
+                indices = np.arange(n * trials_per_fold, (n + 1) * trials_per_fold)
+                trials = np.concatenate([
+                    np.where(idx_to_trials == idx)[0]
+                    for idx in indices
+                ])
+                blocks.append(trials.tolist())
+
+        # Roll the blocks depending on the fold
+        blocks = blocks[-cv_fold:] + blocks[:-cv_fold]
+        
+        if split == 'train': return np.concatenate(blocks[:n_folds-2])
+        elif split == 'val': return blocks[n_folds-2]
+        elif split == 'test': return blocks[n_folds-1]
+        elif split == 'all': return np.concatenate(blocks)
+        else: raise ValueError('Field split must be a train/val/test/all value')
         
 # Return the required trials for splitting correctly the dataset introducing the set when population
 def get_leave_one_out_trials(split: str, n_trials: int, alternate: bool = False, fixed:bool = False):
@@ -139,20 +175,6 @@ def get_SKL_subj_idx(subject):
     zeros = 3 - len(idx) # number of zeros you have to add to the idx
     subj_idx = 'sub-' + ''.join(['0' for _ in range(zeros)] + [idx])
     return subj_idx
-
-# Returns the subjects not present in the list
-def get_other_subjects(subject, dataset):
-    
-    # Obtain the remaining subject on the population setting for saving the results
-    # BUG: in the case of the dataset jaulab, subjects 13 and 16 aren't used because of the electrodes used
-    # so delete them from the excluded subjects list adn differ it when defining the number of total subjects
-    # jaulab_bug_subj = [13, 16]
-    ds_subjects = {'fulsang': ['S'+str(n) for n in range(1, 19)], 
-                #    'jaulab': ['S'+str(n) for n in range(1, 18) if n not in jaulab_bug_subj],
-                   'jaulab': ['S'+str(n) for n in range(1, 18)],
-                   'skl': ['S'+str(n) for n in range(1, 41)]}
-    other_subjects = list(set(ds_subjects[dataset]) - set(subject))
-    return other_subjects
 
 def add_appendix(name, appendix):
     name += '_' + str(appendix)
@@ -346,9 +368,10 @@ def get_data_path(global_data_path:str, dataset:str, preproc_mode=None):
             'fulsang_thortonF_path': '/Fulsang_2017/DATA_fulsPrep_thortF',
             'fulsang_thortonFN_path': '/Fulsang_2017/DATA_fulsPrep_thortFN',
             'fulsang_bandAnalysis_path': '/Fulsang_2017/DATA_fulsPrep_bandAnalysis',
-            'jaulab_path': '/Jaulab_2024/PreprocData_ICA',
+            'jaulab_path': '/Jaulab_2024/PreprocData_COCOHA_26',
             'jaulab_filt_path': '/Jaulab_2024/DATA_filtered',
             'jaulab_fix_path': '/Jaulab_2024/fixed_trials.npy',
+            'kuleuven_path': '/KULeuven_2016/preprocessed_data_py',
             'skl_path': '/SKL_2023/split_data',
             'skl_filt_path': None, 
     }
@@ -360,24 +383,52 @@ def get_channels(dataset:str):
     channels = {
         'skl': 64,
         'fulsang': 64,
+        'kuleuven': 64,
         'jaulab': 61
     }
     return channels[dataset]
 
 def get_subjects(dataset:str):
+    jaulab_bug_subj = [13, 16]
     subjects = {
         'fulsang': ['S'+str(n) for n in range(1, 19)],
         'skl': ['S'+str(n) for n in range(1, 86)],
-        # 'jaulab' : ['S'+str(n) for n in range(1, 18) if n not in jaulab_excl_subj]
-        'jaulab' : ['S'+str(n) for n in range(1, 18)]
+        # 'jaulab' : ['S'+str(n) for n in range(1, 18) if n not in jaulab_bug_subj],
+        'jaulab' : ['S'+str(n) for n in range(1, 25)],
+        'kuleuven' : ['S'+str(n) for n in range(16, 17)],
     }
     return subjects[dataset]
+
+# Returns the subjects not present in the list
+def get_other_subjects(subject, dataset):
+    # Obtain the remaining subject on the population setting for saving the results
+    # BUG: in the case of the dataset jaulab, subjects 13 and 16 aren't used because of the electrodes used
+    # so delete them from the excluded subjects list adn differ it when defining the number of total subjects
+    jaulab_bug_subj = [13, 16]
+    ds_subjects = {'fulsang': ['S'+str(n) for n in range(1, 19)], 
+                #    'jaulab': ['S'+str(n) for n in range(1, 18) if n not in jaulab_bug_subj],
+                   'jaulab': ['S'+str(n) for n in range(1, 25)],
+                   'skl': ['S'+str(n) for n in range(1, 41)],
+                   'kuleuven' : ['S'+str(n) for n in range(1, 17)],
+    }
+    other_subjects = list(set(ds_subjects[dataset]) - set(subject))
+    return other_subjects
 
 def get_trials_len(dataset:str):
     trial_lenghts = {
         'skl': 3200,
         'fulsang': 3200,
-        'jaulab': 1696
+        'kuleuven': 23040,
+        'jaulab': 1664,
+    }
+    return trial_lenghts[dataset]
+
+def get_n_trials(dataset:str):
+    trial_lenghts = {
+        'skl': 4,
+        'fulsang': 60,
+        'kuleuven': 12, # 12 trials considered to map the 20 real trials
+        'jaulab': 96,
     }
     return trial_lenghts[dataset]
 

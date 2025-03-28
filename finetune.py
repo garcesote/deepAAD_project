@@ -17,11 +17,10 @@ import wandb
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5):
+def main(config, wandb_upload, dataset, key, cross_val, early_stop, project:str, lr_decay=0.5):
 
     global_path = config['global_path']
     global_data_path = config['global_data_path']
-    project = 'euroacustics'
     exp_name = config['exp_name']
     
     # REPRODUCIBILITY
@@ -85,10 +84,8 @@ def main(config, wandb_upload, dataset, key, cross_val, early_stop, lr_decay=0.5
         selected_subj = get_subjects(dataset)
 
         # Cross validation 
-        if cross_val and key != 'subj_independent':
-            n_folds = 5
-        elif cross_val and key == 'subj_independent':
-            n_folds = 3
+        if cross_val:
+            n_folds = 5 if dataset == 'fulsang' else 4
         else:
             n_folds = 1
         
@@ -352,6 +349,7 @@ if __name__ == "__main__":
     # Add config argument
     parser.add_argument("--config", type=str, default='configs/stim_input/aad_net.yaml', help="Ruta al archivo config")
     parser.add_argument("--wandb", action='store_true', help="When included actualize wandb cloud")
+    parser.add_argument("--project", type=str, default='stim_input', help="Name of the project that must corresponds with wandb project and set the save path for metrics and models")
     parser.add_argument("--dataset", type=str, default='fulsang', help="Dataset")
     parser.add_argument("--key", type=str, default='population', help="Key from subj_specific, subj_independent and population")
     parser.add_argument("--cross_val", action='store_true', help="When included cross validation performed")
@@ -373,4 +371,4 @@ if __name__ == "__main__":
         # Llamar a la función de entrenamiento con los argumentos
         config = yaml.safe_load(archivo)
 
-    main(config, wandb_upload, args.dataset, args.key, args.cross_val, not args.max_epoch, args.lr_decay)
+    main(config, wandb_upload, args.dataset, args.key, args.cross_val, not args.max_epoch, args.project, args.lr_decay)

@@ -28,16 +28,13 @@ class CCA_AAD:
 
         decoder_len: defines the number of post-stim samples for computing the eeg stim matrix
 
-        trial_len: pre and post lags of the matrix before and after each trial
-
         n_components: defines the dimensions of the projected subspace (by default: min(encoder_len, decoder_len))
 
     """
-    def __init__(self, encoder_len:int, decoder_len:int, trial_len:int, n_components:int = None, max_iter:int = 500, tol:float = 1e-06):
+    def __init__(self, encoder_len:int, decoder_len:int, n_components:int = None, max_iter:int = 500, tol:float = 1e-06):
         
         self.encoder_len = encoder_len
         self.decoder_len = decoder_len
-        self.trial_len = trial_len
         self.n_components = n_components if n_components is not None else min(encoder_len, decoder_len)
 
         self.model = CCA(n_components=n_components, max_iter=max_iter, tol=tol, copy=False)

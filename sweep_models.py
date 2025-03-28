@@ -255,10 +255,9 @@ def process_training_run(run, config, dataset, global_data_path, project, key, c
         wandb.log({'best_epoch': best_epoch, 'best_loss': best_loss, 'best_acc':best_accuracy})
         wandb.finish()
 
-def main(config, dataset, key):
+def main(config, dataset, key, project):
 
     global_data_path = config['global_data_path']
-    project = 'euroacustics'
     config['dataset'] = dataset
     config['key'] = key
     cross_val = None
@@ -278,6 +277,7 @@ if __name__ == "__main__":
     config_path = 'configs/euroacustics/conformer.yaml'
     dataset = 'fulsang'
     key = 'population'
+    project = 'stim_Input'
 
     n_threads = 20
     torch.set_num_threads(n_threads)
@@ -291,4 +291,4 @@ if __name__ == "__main__":
         config = yaml.safe_load(archivo)
 
     # Ejecutar agentes
-    main(config, dataset, key)
+    main(config, dataset, key, project)
